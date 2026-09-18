@@ -1,0 +1,48 @@
+# Dart / Flutter
+.dart_tool/
+.pub/
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Build
+build/
+**/build/
+
+# Coverage
+coverage/
+
+# Generated docs
+**/doc/api/
+
+# Android generated
+android/.gradle/
+android/app/build/
+android/build/
+android/app/.cxx/
+android/local.properties
+
+# iOS generated
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/.last_build_id
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Misc
+*.log
+*.class
+*.pyc
+*.swp
+.DS_Store
+
+# Flutter generated
+app.*.symbols
+app.*.map.json

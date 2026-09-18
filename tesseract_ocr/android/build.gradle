@@ -1,0 +1,20 @@
+plugins {
+    id("com.android.library")
+    id("org.jetbrains.kotlin.android")
+}
+
+group = "io.paratoner.tesseract_ocr"
+version = "1.0.0"
+
+android {
+    namespace = "io.paratoner.tesseract_ocr"
+    compileSdk = 35
+
+    defaultConfig {
+        minSdk = 23
+    }
+}
+
+dependencies {
+    implementation("com.rmtheis:tess-two:9.1.0")
+}

@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "431969184661",
+    "project_id": "scanly-a1214",
+    "storage_bucket": "scanly-a1214.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:431969184661:android:741a333f8d42f26e19a49c",
+        "android_client_info": {
+          "package_name": "com.example.scanly"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "431969184661-jdsl5av6b1iplbhgga1jvdrfmh7dh143.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCX4ehE0r6DR8rQifo4nDSvG0kEcXkAJpg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "431969184661-jdsl5av6b1iplbhgga1jvdrfmh7dh143.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "431969184661-ug8a301qcab0ikgm4iolo3jr8eeoseqk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.scanly"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
