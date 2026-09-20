@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:scanly/QR_Share_Sheet.dart';
 import 'package:scanly/ScanlyActivityService.dart';
 import 'package:scanly/Scanly_Items.dart';
@@ -26,10 +27,12 @@ class QRGeneratorPage extends StatefulWidget {
   });
 
   @override
-  State<QRGeneratorPage> createState() => _QRGeneratorPageState();
+  State<QRGeneratorPage> createState() =>
+      _QRGeneratorPageState();
 }
 
-class _QRGeneratorPageState extends State<QRGeneratorPage> {
+class _QRGeneratorPageState
+    extends State<QRGeneratorPage> {
   final TextEditingController _textController =
       TextEditingController();
 
@@ -37,6 +40,7 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
 
   final GlobalKey _qrKey = GlobalKey();
 
+  // Used only for saving QR image to gallery.
   static const MethodChannel _shareChannel =
       MethodChannel('scanly/share');
 
@@ -76,11 +80,14 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
       type: 'qr',
       route: '/qr-tools',
       data: value,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
+      createdAt:
+          DateTime.now().millisecondsSinceEpoch,
     );
   }
 
-  Future<void> _registerGeneratedQR(String value) async {
+  Future<void> _registerGeneratedQR(
+    String value,
+  ) async {
     final item = _createScanlyItem(value);
 
     await ScanlyActivityService.addRecent(item);
@@ -114,7 +121,8 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
 
   Future<void> _pickImage() async {
     try {
-      final XFile? image = await _picker.pickImage(
+      final XFile? image =
+          await _picker.pickImage(
         source: ImageSource.gallery,
       );
 
@@ -142,7 +150,8 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
 
   Future<void> _pickVideo() async {
     try {
-      final XFile? video = await _picker.pickVideo(
+      final XFile? video =
+          await _picker.pickVideo(
         source: ImageSource.gallery,
       );
 
@@ -172,18 +181,21 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
     try {
       await WidgetsBinding.instance.endOfFrame;
 
-      final boundary = _qrKey.currentContext
-          ?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary =
+          _qrKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
 
       if (boundary == null) {
         return null;
       }
 
-      final ui.Image image = await boundary.toImage(
+      final ui.Image image =
+          await boundary.toImage(
         pixelRatio: 3.0,
       );
 
-      final ByteData? byteData = await image.toByteData(
+      final ByteData? byteData =
+          await image.toByteData(
         format: ui.ImageByteFormat.png,
       );
 
@@ -245,7 +257,8 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
     });
 
     try {
-      final imagePath = await _createQRImage();
+      final imagePath =
+          await _createQRImage();
 
       if (imagePath == null) {
         return;
@@ -274,7 +287,8 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
 
       if (!mounted) return;
 
-      if (savedUri != null && savedUri.isNotEmpty) {
+      if (savedUri != null &&
+          savedUri.isNotEmpty) {
         _showMessage(
           'QR Code saved to Scanly Images.',
         );
@@ -304,6 +318,10 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
     }
   }
 
+  // ----------------------------------------------------------
+  // SHARE QR CODE
+  // ----------------------------------------------------------
+
   Future<void> _shareTo(
     List<String> packageNames,
   ) async {
@@ -321,32 +339,33 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
     });
 
     try {
-      final imagePath = await _createQRImage();
+      final imagePath =
+          await _createQRImage();
 
       if (imagePath == null) {
         return;
       }
 
-      final result =
-          await _shareChannel.invokeMethod<bool>(
-        'shareToApp',
-        {
-          'filePath': imagePath,
-          'packageNames': packageNames,
-          'text': 'QR Code generated with Scanly',
-        },
-      );
+      final file = File(imagePath);
 
-      if (result == false && mounted) {
+      if (!await file.exists()) {
         _showMessage(
-          'The selected app is not available.',
+          'QR image file was not created.',
         );
+        return;
       }
-    } on PlatformException catch (e) {
-      if (!mounted) return;
 
-      _showMessage(
-        e.message ?? 'Failed to share QR Code.',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(
+              imagePath,
+              mimeType: 'image/png',
+            ),
+          ],
+          text: _qrData,
+          subject: 'Scanly QR Code',
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -378,24 +397,33 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
     });
 
     try {
-      final imagePath = await _createQRImage();
+      final imagePath =
+          await _createQRImage();
 
       if (imagePath == null) {
         return;
       }
 
-      await _shareChannel.invokeMethod(
-        'shareMore',
-        {
-          'filePath': imagePath,
-          'text': 'QR Code generated with Scanly',
-        },
-      );
-    } on PlatformException catch (e) {
-      if (!mounted) return;
+      final file = File(imagePath);
 
-      _showMessage(
-        e.message ?? 'Failed to share QR Code.',
+      if (!await file.exists()) {
+        _showMessage(
+          'QR image file was not created.',
+        );
+        return;
+      }
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(
+              imagePath,
+              mimeType: 'image/png',
+            ),
+          ],
+          text: _qrData,
+          subject: 'Scanly QR Code',
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -427,6 +455,10 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
     );
   }
 
+  // ----------------------------------------------------------
+  // FAVORITES
+  // ----------------------------------------------------------
+
   Future<void> _toggleFavorite() async {
     if (_qrData.isEmpty) {
       _showMessage(
@@ -435,7 +467,8 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
       return;
     }
 
-    final item = _createScanlyItem(_qrData);
+    final item =
+        _createScanlyItem(_qrData);
 
     final currentlyFavorite =
         ScanlyActivityService.isFavorite(
@@ -443,9 +476,8 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
     );
 
     if (currentlyFavorite) {
-      await ScanlyActivityService.removeFavorite(
-        item.id,
-      );
+      await ScanlyActivityService
+          .removeFavorite(item.id);
 
       widget.onToggleFavorite(_qrData);
 
@@ -455,7 +487,8 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
         );
       }
     } else {
-      await ScanlyActivityService.addFavorite(item);
+      await ScanlyActivityService
+          .addFavorite(item);
 
       widget.onToggleFavorite(_qrData);
 
@@ -488,9 +521,11 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          behavior: SnackBarBehavior.floating,
+          behavior:
+              SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius:
+                BorderRadius.circular(14),
           ),
         ),
       );
@@ -498,9 +533,11 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors =
+        Theme.of(context).colorScheme;
 
-    final bool hasQR = _qrData.isNotEmpty;
+    final bool hasQR =
+        _qrData.isNotEmpty;
 
     final bool favorite =
         hasQR &&
@@ -519,7 +556,8 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
+          padding:
+              const EdgeInsets.fromLTRB(
             20,
             10,
             20,
@@ -543,18 +581,24 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                     .bodyMedium,
               ),
               const SizedBox(height: 24),
+
+              // TYPE BUTTONS
               Row(
                 children: [
                   Expanded(
                     child: _TypeButton(
-                      icon: Icons.text_fields_rounded,
+                      icon:
+                          Icons.text_fields_rounded,
                       label: 'Text',
                       selected:
-                          _selectedType == QRType.text,
+                          _selectedType ==
+                              QRType.text,
                       onTap: () {
                         setState(() {
-                          _selectedType = QRType.text;
-                          _selectedFile = null;
+                          _selectedType =
+                              QRType.text;
+                          _selectedFile =
+                              null;
                           _qrData = '';
                         });
                       },
@@ -563,13 +607,16 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _TypeButton(
-                      icon: Icons.image_rounded,
+                      icon:
+                          Icons.image_rounded,
                       label: 'Image',
                       selected:
-                          _selectedType == QRType.image,
+                          _selectedType ==
+                              QRType.image,
                       onTap: () {
                         setState(() {
-                          _selectedType = QRType.image;
+                          _selectedType =
+                              QRType.image;
                           _qrData = '';
                         });
 
@@ -580,14 +627,16 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _TypeButton(
-                      icon:
-                          Icons.video_library_rounded,
+                      icon: Icons
+                          .video_library_rounded,
                       label: 'Video',
                       selected:
-                          _selectedType == QRType.video,
+                          _selectedType ==
+                              QRType.video,
                       onTap: () {
                         setState(() {
-                          _selectedType = QRType.video;
+                          _selectedType =
+                              QRType.video;
                           _qrData = '';
                         });
 
@@ -597,80 +646,114 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 20),
-              if (_selectedType == QRType.text) ...[
+
+              // TEXT INPUT
+              if (_selectedType ==
+                  QRType.text) ...[
                 TextField(
-                  controller: _textController,
+                  controller:
+                      _textController,
                   maxLines: 5,
                   minLines: 3,
                   textInputAction:
                       TextInputAction.newline,
-                  decoration: const InputDecoration(
+                  decoration:
+                      const InputDecoration(
                     hintText:
                         'Enter text, URL, phone number...',
                     prefixIcon: Padding(
-                      padding: EdgeInsets.only(
+                      padding:
+                          EdgeInsets.only(
                         top: 14,
                       ),
                       child: Icon(
                         Icons.edit_rounded,
                       ),
                     ),
-                    alignLabelWithHint: true,
+                    alignLabelWithHint:
+                        true,
                   ),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
                   height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: _generateTextQR,
+                  child:
+                      ElevatedButton.icon(
+                    onPressed:
+                        _generateTextQR,
                     icon: const Icon(
-                      Icons.qr_code_2_rounded,
+                      Icons
+                          .qr_code_2_rounded,
                     ),
                     label: const Text(
                       'Generate QR Code',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight:
+                            FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
               ],
-              if (_selectedType == QRType.image &&
+
+              // IMAGE PICKER
+              if (_selectedType ==
+                      QRType.image &&
                   _qrData.isEmpty)
                 _FilePickerCard(
-                  icon: Icons.image_rounded,
-                  title: 'Select an Image',
+                  icon:
+                      Icons.image_rounded,
+                  title:
+                      'Select an Image',
                   subtitle:
                       'Choose an image from your gallery',
                   onTap: _pickImage,
                 ),
-              if (_selectedType == QRType.video &&
+
+              // VIDEO PICKER
+              if (_selectedType ==
+                      QRType.video &&
                   _qrData.isEmpty)
                 _FilePickerCard(
-                  icon:
-                      Icons.video_library_rounded,
-                  title: 'Select a Video',
+                  icon: Icons
+                      .video_library_rounded,
+                  title:
+                      'Select a Video',
                   subtitle:
                       'Choose a video from your gallery',
                   onTap: _pickVideo,
                 ),
+
               const SizedBox(height: 24),
+
+              // QR PREVIEW
               if (hasQR)
                 Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
+                  padding:
+                      const EdgeInsets.all(20),
+                  decoration:
+                      BoxDecoration(
                     color: colors.surface,
                     borderRadius:
-                        BorderRadius.circular(24),
+                        BorderRadius.circular(
+                      24,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(
+                        color:
+                            Colors.black
+                                .withValues(
                           alpha: 0.05,
                         ),
                         blurRadius: 20,
-                        offset: const Offset(0, 8),
+                        offset:
+                            const Offset(
+                          0,
+                          8,
+                        ),
                       ),
                     ],
                   ),
@@ -680,61 +763,92 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                         'Your QR Code',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: colors.onSurface,
+                          fontWeight:
+                              FontWeight.bold,
+                          color:
+                              colors.onSurface,
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(
+                        height: 18,
+                      ),
+
+                      // THIS ENTIRE AREA IS SHARED
                       RepaintBoundary(
                         key: _qrKey,
                         child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(
+                          width:
+                              double.infinity,
+                          padding:
+                              const EdgeInsets
+                                  .fromLTRB(
                             24,
                             24,
                             24,
                             18,
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                Colors.white,
                             borderRadius:
-                                BorderRadius.circular(18),
+                                BorderRadius
+                                    .circular(
+                              18,
+                            ),
                           ),
                           child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                            mainAxisSize:
+                                MainAxisSize
+                                    .min,
                             children: [
                               QrImageView(
                                 data: _qrData,
-                                version: QrVersions.auto,
+                                version:
+                                    QrVersions
+                                        .auto,
                                 size: 240,
                                 backgroundColor:
                                     Colors.white,
                                 errorCorrectionLevel:
-                                    QrErrorCorrectLevel.M,
+                                    QrErrorCorrectLevel
+                                        .M,
                               ),
-                              const SizedBox(height: 18),
+                              const SizedBox(
+                                height: 18,
+                              ),
                               Row(
                                 mainAxisAlignment:
-                                    MainAxisAlignment.center,
+                                    MainAxisAlignment
+                                        .center,
                                 crossAxisAlignment:
-                                    CrossAxisAlignment.center,
+                                    CrossAxisAlignment
+                                        .center,
                                 children: [
                                   Image.asset(
                                     'assets/images/Scanly_Splash.png',
                                     width: 38,
                                     height: 38,
-                                    fit: BoxFit.contain,
+                                    fit: BoxFit
+                                        .contain,
                                   ),
-                                  const SizedBox(width: 9),
+                                  const SizedBox(
+                                      width: 9),
                                   const Text(
                                     'Scanly',
-                                    style: TextStyle(
-                                      fontSize: 22,
+                                    style:
+                                        TextStyle(
+                                      fontSize:
+                                          22,
                                       fontWeight:
-                                          FontWeight.w800,
+                                          FontWeight
+                                              .w800,
                                       color:
-                                          Color(0xFF5B5FEF),
-                                      letterSpacing: 0.2,
+                                          Color(
+                                        0xFF5B5FEF,
+                                      ),
+                                      letterSpacing:
+                                          0.2,
                                     ),
                                   ),
                                 ],
@@ -743,27 +857,41 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 18),
+
+                      const SizedBox(
+                        height: 18,
+                      ),
+
+                      // QR DATA
                       Container(
-                        width: double.infinity,
+                        width:
+                            double.infinity,
                         padding:
-                            const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
+                            const EdgeInsets
+                                .all(14),
+                        decoration:
+                            BoxDecoration(
                           color: colors
                               .surfaceContainerHighest,
                           borderRadius:
-                              BorderRadius.circular(14),
+                              BorderRadius
+                                  .circular(
+                            14,
+                          ),
                         ),
                         child: Row(
                           children: [
                             Expanded(
                               child: Text(
-                                _selectedFile != null
-                                    ? _selectedFile!.path
+                                _selectedFile !=
+                                        null
+                                    ? _selectedFile!
+                                        .path
                                     : _qrData,
                                 maxLines: 2,
                                 overflow:
-                                    TextOverflow.ellipsis,
+                                    TextOverflow
+                                        .ellipsis,
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: colors
@@ -771,13 +899,17 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(
+                              width: 8,
+                            ),
                             IconButton(
                               tooltip: 'Copy',
                               onPressed: () {
-                                Clipboard.setData(
+                                Clipboard
+                                    .setData(
                                   ClipboardData(
-                                    text: _qrData,
+                                    text:
+                                        _qrData,
                                   ),
                                 );
 
@@ -785,19 +917,27 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                                   'QR value copied.',
                                 );
                               },
-                              icon: const Icon(
-                                Icons.copy_rounded,
+                              icon:
+                                  const Icon(
+                                Icons
+                                    .copy_rounded,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 18),
+
+                      const SizedBox(
+                        height: 18,
+                      ),
+
+                      // SAVE + SHARE
                       Row(
                         children: [
                           Expanded(
                             child:
-                                OutlinedButton.icon(
+                                OutlinedButton
+                                    .icon(
                               onPressed:
                                   _isSaving
                                       ? null
@@ -808,22 +948,26 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                                       height: 20,
                                       child:
                                           CircularProgressIndicator(
-                                        strokeWidth: 2,
+                                        strokeWidth:
+                                            2,
                                       ),
                                     )
                                   : const Icon(
                                       Icons
                                           .download_rounded,
                                     ),
-                              label: const Text(
+                              label:
+                                  const Text(
                                 'Save',
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(
+                              width: 12),
                           Expanded(
                             child:
-                                ElevatedButton.icon(
+                                ElevatedButton
+                                    .icon(
                               onPressed:
                                   _isSharing
                                       ? null
@@ -834,31 +978,42 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                                       height: 20,
                                       child:
                                           CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color:
-                                            Colors.white,
+                                        strokeWidth:
+                                            2,
+                                        color: Colors
+                                            .white,
                                       ),
                                     )
                                   : const Icon(
                                       Icons
                                           .share_rounded,
                                     ),
-                              label: const Text(
+                              label:
+                                  const Text(
                                 'Share',
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+
+                      const SizedBox(
+                        height: 12,
+                      ),
+
+                      // FAVORITE
                       SizedBox(
-                        width: double.infinity,
+                        width:
+                            double.infinity,
                         child:
-                            OutlinedButton.icon(
-                          onPressed: _toggleFavorite,
+                            OutlinedButton
+                                .icon(
+                          onPressed:
+                              _toggleFavorite,
                           icon: Icon(
                             favorite
-                                ? Icons.favorite_rounded
+                                ? Icons
+                                    .favorite_rounded
                                 : Icons
                                     .favorite_border_rounded,
                           ),
@@ -869,13 +1024,20 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 10),
+
+                      const SizedBox(
+                          height: 10),
+
+                      // CREATE ANOTHER
                       TextButton.icon(
-                        onPressed: _createAnother,
+                        onPressed:
+                            _createAnother,
                         icon: const Icon(
-                          Icons.refresh_rounded,
+                          Icons
+                              .refresh_rounded,
                         ),
-                        label: const Text(
+                        label:
+                            const Text(
                           'Create Another',
                         ),
                       ),
@@ -896,7 +1058,8 @@ enum QRType {
   video,
 }
 
-class _TypeButton extends StatelessWidget {
+class _TypeButton
+    extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
@@ -918,15 +1081,20 @@ class _TypeButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius:
+            BorderRadius.circular(18),
         child: AnimatedContainer(
           duration:
-              const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(
+              const Duration(
+            milliseconds: 200,
+          ),
+          padding:
+              const EdgeInsets.symmetric(
             vertical: 14,
             horizontal: 8,
           ),
-          decoration: BoxDecoration(
+          decoration:
+              BoxDecoration(
             color: selected
                 ? colors.primary.withValues(
                     alpha: 0.10,
@@ -937,8 +1105,10 @@ class _TypeButton extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? colors.primary
-                  : colors.surfaceContainerHighest,
-              width: selected ? 1.5 : 1,
+                  : colors
+                      .surfaceContainerHighest,
+              width:
+                  selected ? 1.5 : 1,
             ),
           ),
           child: Column(
@@ -947,7 +1117,8 @@ class _TypeButton extends StatelessWidget {
                 icon,
                 color: selected
                     ? colors.primary
-                    : colors.onSurfaceVariant,
+                    : colors
+                        .onSurfaceVariant,
                 size: 26,
               ),
               const SizedBox(height: 7),
@@ -960,7 +1131,8 @@ class _TypeButton extends StatelessWidget {
                       : FontWeight.w500,
                   color: selected
                       ? colors.primary
-                      : colors.onSurfaceVariant,
+                      : colors
+                          .onSurfaceVariant,
                 ),
               ),
             ],
@@ -971,7 +1143,8 @@ class _TypeButton extends StatelessWidget {
   }
 }
 
-class _FilePickerCard extends StatelessWidget {
+class _FilePickerCard
+    extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -993,11 +1166,14 @@ class _FilePickerCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius:
+            BorderRadius.circular(22),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
+          padding:
+              const EdgeInsets.all(24),
+          decoration:
+              BoxDecoration(
             color: colors.surface,
             borderRadius:
                 BorderRadius.circular(22),
@@ -1011,8 +1187,10 @@ class _FilePickerCard extends StatelessWidget {
               Container(
                 width: 64,
                 height: 64,
-                decoration: BoxDecoration(
-                  color: colors.primary.withValues(
+                decoration:
+                    BoxDecoration(
+                  color: colors.primary
+                      .withValues(
                     alpha: 0.10,
                   ),
                   shape: BoxShape.circle,
@@ -1023,29 +1201,35 @@ class _FilePickerCard extends StatelessWidget {
                   color: colors.primary,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(
+                  height: 14),
               Text(
                 title,
                 style: TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: colors.onSurface,
+                  fontWeight:
+                      FontWeight.bold,
+                  color:
+                      colors.onSurface,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 subtitle,
-                textAlign: TextAlign.center,
+                textAlign:
+                    TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
-                  color:
-                      colors.onSurfaceVariant,
+                  color: colors
+                      .onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(
+                  height: 16),
               OutlinedButton(
                 onPressed: onTap,
-                child: const Text(
+                child:
+                    const Text(
                   'Choose File',
                 ),
               ),

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -28,6 +29,10 @@ class _RegisterPageState extends State<RegisterPage> {
   bool isGoogleLoading = false;
   bool isFacebookLoading = false;
 
+  // false = Email registration
+  // true = Google / Facebook registration
+  bool isSocialRegister = false;
+
   @override
   void dispose() {
     firstNameController.dispose();
@@ -38,23 +43,26 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  // ============================================================
+  // NORMAL EMAIL REGISTER
+  // ============================================================
+
   Future<void> register() async {
     if (!formKey.currentState!.validate()) {
       return;
     }
 
-    if (passwordController.text !=
-        confirmPasswordController.text) {
+    if (passwordController.text != confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Passwords do not match.',
-          ),
+          content: Text('Passwords do not match.'),
         ),
       );
 
       return;
     }
+
+    isSocialRegister = false;
 
     await context.read<AuthCubit>().register(
           firstName: firstNameController.text.trim(),
@@ -65,6 +73,10 @@ class _RegisterPageState extends State<RegisterPage> {
         );
   }
 
+  // ============================================================
+  // GOOGLE REGISTER
+  // ============================================================
+
   Future<void> registerWithGoogle() async {
     if (isGoogleLoading || isFacebookLoading) {
       return;
@@ -72,10 +84,60 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() {
       isGoogleLoading = true;
+      isSocialRegister = true;
     });
 
+    debugPrint('REGISTER PAGE: Google button pressed');
+
     try {
-      await context.read<AuthCubit>().signInWithGoogle();
+      final authCubit = context.read<AuthCubit>();
+
+      await authCubit.signInWithGoogle();
+
+      debugPrint(
+        'REGISTER PAGE: signInWithGoogle returned',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final User? user = FirebaseAuth.instance.currentUser;
+
+      debugPrint(
+        'REGISTER PAGE GOOGLE USER: ${user?.email}',
+      );
+
+      if (user != null) {
+        debugPrint(
+          'REGISTER PAGE GOOGLE: Going to Home',
+        );
+
+        await saveSocialUserData(user);
+
+        if (!mounted) {
+          return;
+        }
+
+        context.go('/home');
+      }
+    } catch (e) {
+      debugPrint(
+        'REGISTER PAGE GOOGLE ERROR: $e',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Google registration failed: $e',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     } finally {
       if (!mounted) {
         return;
@@ -87,6 +149,10 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  // ============================================================
+  // FACEBOOK REGISTER
+  // ============================================================
+
   Future<void> registerWithFacebook() async {
     if (isGoogleLoading || isFacebookLoading) {
       return;
@@ -94,10 +160,62 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() {
       isFacebookLoading = true;
+      isSocialRegister = true;
     });
 
+    debugPrint(
+      'REGISTER PAGE: Facebook button pressed',
+    );
+
     try {
-      await context.read<AuthCubit>().signInWithFacebook();
+      final authCubit = context.read<AuthCubit>();
+
+      await authCubit.signInWithFacebook();
+
+      debugPrint(
+        'REGISTER PAGE: signInWithFacebook returned',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final User? user = FirebaseAuth.instance.currentUser;
+
+      debugPrint(
+        'REGISTER PAGE FACEBOOK USER: ${user?.email}',
+      );
+
+      if (user != null) {
+        debugPrint(
+          'REGISTER PAGE FACEBOOK: Going to Home',
+        );
+
+        await saveSocialUserData(user);
+
+        if (!mounted) {
+          return;
+        }
+
+        context.go('/home');
+      }
+    } catch (e) {
+      debugPrint(
+        'REGISTER PAGE FACEBOOK ERROR: $e',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Facebook registration failed: $e',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     } finally {
       if (!mounted) {
         return;
@@ -109,6 +227,10 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  // ============================================================
+  // SAVE NORMAL USER DATA
+  // ============================================================
+
   Future<void> saveUserData() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -118,31 +240,93 @@ class _RegisterPageState extends State<RegisterPage> {
 
     final fullName = '$firstName $lastName'.trim();
 
-    await prefs.setString(
-      'user_name',
-      fullName,
-    );
+    if (fullName.isNotEmpty) {
+      await prefs.setString(
+        'user_name',
+        fullName,
+      );
+    }
 
-    await prefs.setString(
-      'first_name',
-      firstName,
-    );
+    if (firstName.isNotEmpty) {
+      await prefs.setString(
+        'first_name',
+        firstName,
+      );
+    }
 
-    await prefs.setString(
-      'last_name',
-      lastName,
-    );
+    if (lastName.isNotEmpty) {
+      await prefs.setString(
+        'last_name',
+        lastName,
+      );
+    }
 
-    await prefs.setString(
-      'user_email',
-      email,
-    );
+    if (email.isNotEmpty) {
+      await prefs.setString(
+        'user_email',
+        email,
+      );
+    }
 
     await prefs.setBool(
       'is_registered',
       true,
     );
   }
+
+  // ============================================================
+  // SAVE GOOGLE / FACEBOOK USER DATA
+  // ============================================================
+
+  Future<void> saveSocialUserData(User user) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final displayName = user.displayName?.trim() ?? '';
+    final email = user.email?.trim() ?? '';
+
+    if (displayName.isNotEmpty) {
+      await prefs.setString(
+        'user_name',
+        displayName,
+      );
+
+      final parts = displayName.split(' ');
+
+      if (parts.isNotEmpty && parts.first.isNotEmpty) {
+        await prefs.setString(
+          'first_name',
+          parts.first,
+        );
+      }
+
+      if (parts.length > 1) {
+        final lastName = parts.sublist(1).join(' ').trim();
+
+        if (lastName.isNotEmpty) {
+          await prefs.setString(
+            'last_name',
+            lastName,
+          );
+        }
+      }
+    }
+
+    if (email.isNotEmpty) {
+      await prefs.setString(
+        'user_email',
+        email,
+      );
+    }
+
+    await prefs.setBool(
+      'is_registered',
+      true,
+    );
+  }
+
+  // ============================================================
+  // THEME
+  // ============================================================
 
   Future<void> toggleTheme() async {
     await ThemeController.toggleTheme();
@@ -168,14 +352,49 @@ class _RegisterPageState extends State<RegisterPage> {
 
     return BlocListener<AuthCubit, AuthState>(
       listener: (context, state) async {
+        // ======================================================
+        // SUCCESS
+        // ======================================================
+
         if (state.status == AuthStatus.success &&
             state.user != null) {
           final user = state.user!;
 
-          if (user.emailVerified) {
+          // ====================================================
+          // GOOGLE / FACEBOOK
+          //
+          // Social registration goes directly to Home.
+          // ====================================================
+
+          if (isSocialRegister) {
+            await saveSocialUserData(user);
+
+            if (!context.mounted) {
+              return;
+            }
+
             context.go('/home');
             return;
           }
+
+          // ====================================================
+          // NORMAL EMAIL REGISTRATION
+          // ====================================================
+
+          if (user.emailVerified) {
+            await saveUserData();
+
+            if (!context.mounted) {
+              return;
+            }
+
+            context.go('/home');
+            return;
+          }
+
+          // ====================================================
+          // EMAIL NOT VERIFIED
+          // ====================================================
 
           await saveUserData();
 
@@ -192,7 +411,13 @@ class _RegisterPageState extends State<RegisterPage> {
           );
 
           context.go('/verification');
+
+          return;
         }
+
+        // ======================================================
+        // FAILURE
+        // ======================================================
 
         if (state.status == AuthStatus.failure) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -206,6 +431,11 @@ class _RegisterPageState extends State<RegisterPage> {
           );
         }
       },
+
+      // ========================================================
+      // UI
+      // ========================================================
+
       child: Scaffold(
         body: Container(
           width: double.infinity,
@@ -224,6 +454,10 @@ class _RegisterPageState extends State<RegisterPage> {
           child: SafeArea(
             child: Stack(
               children: [
+                // ==================================================
+                // THEME BUTTON
+                // ==================================================
+
                 Positioned(
                   top: 12,
                   right: 20,
@@ -251,7 +485,8 @@ class _RegisterPageState extends State<RegisterPage> {
                                   : Colors.white.withOpacity(0.18),
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.35),
+                                color:
+                                    Colors.white.withOpacity(0.35),
                                 width: 1,
                               ),
                               boxShadow: [
@@ -291,6 +526,11 @@ class _RegisterPageState extends State<RegisterPage> {
                     },
                   ),
                 ),
+
+                // ==================================================
+                // PAGE CONTENT
+                // ==================================================
+
                 SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
@@ -299,6 +539,11 @@ class _RegisterPageState extends State<RegisterPage> {
                   child: Column(
                     children: [
                       const SizedBox(height: 55),
+
+                      // ==================================================
+                      // ICON
+                      // ==================================================
+
                       Container(
                         width: 82,
                         height: 82,
@@ -316,7 +561,9 @@ class _RegisterPageState extends State<RegisterPage> {
                           color: Colors.white,
                         ),
                       ),
+
                       const SizedBox(height: 15),
+
                       const Text(
                         'Create Account',
                         style: TextStyle(
@@ -325,7 +572,9 @@ class _RegisterPageState extends State<RegisterPage> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+
                       const SizedBox(height: 8),
+
                       const Text(
                         'Create your Scanly account',
                         style: TextStyle(
@@ -333,7 +582,13 @@ class _RegisterPageState extends State<RegisterPage> {
                           fontSize: 15,
                         ),
                       ),
+
                       const SizedBox(height: 30),
+
+                      // ==================================================
+                      // CARD
+                      // ==================================================
+
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(24),
@@ -342,7 +597,8 @@ class _RegisterPageState extends State<RegisterPage> {
                           borderRadius: BorderRadius.circular(30),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.12),
+                              color:
+                                  Colors.black.withOpacity(0.12),
                               blurRadius: 25,
                               offset: const Offset(0, 10),
                             ),
@@ -352,6 +608,10 @@ class _RegisterPageState extends State<RegisterPage> {
                           key: formKey,
                           child: Column(
                             children: [
+                              // ==================================================
+                              // FIRST NAME
+                              // ==================================================
+
                               TextFormField(
                                 controller: firstNameController,
                                 textInputAction:
@@ -372,7 +632,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                   return null;
                                 },
                               ),
+
                               const SizedBox(height: 15),
+
+                              // ==================================================
+                              // LAST NAME
+                              // ==================================================
+
                               TextFormField(
                                 controller: lastNameController,
                                 textInputAction:
@@ -393,7 +659,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                   return null;
                                 },
                               ),
+
                               const SizedBox(height: 15),
+
+                              // ==================================================
+                              // EMAIL
+                              // ==================================================
+
                               TextFormField(
                                 controller: emailController,
                                 keyboardType:
@@ -426,7 +698,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                   return null;
                                 },
                               ),
+
                               const SizedBox(height: 15),
+
+                              // ==================================================
+                              // PASSWORD
+                              // ==================================================
+
                               TextFormField(
                                 controller: passwordController,
                                 obscureText: obscurePassword,
@@ -469,7 +747,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                   return null;
                                 },
                               ),
+
                               const SizedBox(height: 15),
+
+                              // ==================================================
+                              // CONFIRM PASSWORD
+                              // ==================================================
+
                               TextFormField(
                                 controller:
                                     confirmPasswordController,
@@ -515,7 +799,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                   return null;
                                 },
                               ),
+
                               const SizedBox(height: 25),
+
+                              // ==================================================
+                              // CREATE ACCOUNT BUTTON
+                              // ==================================================
+
                               BlocBuilder<AuthCubit, AuthState>(
                                 builder: (context, state) {
                                   final isLoading =
@@ -570,7 +860,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                   );
                                 },
                               ),
+
                               const SizedBox(height: 25),
+
+                              // ==================================================
+                              // DIVIDER
+                              // ==================================================
+
                               Row(
                                 children: [
                                   Expanded(
@@ -602,7 +898,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ),
                                 ],
                               ),
+
                               const SizedBox(height: 20),
+
+                              // ==================================================
+                              // GOOGLE + FACEBOOK
+                              // ==================================================
+
                               Row(
                                 children: [
                                   Expanded(
@@ -627,7 +929,9 @@ class _RegisterPageState extends State<RegisterPage> {
                                           textPrimary,
                                     ),
                                   ),
+
                                   const SizedBox(width: 12),
+
                                   Expanded(
                                     child: _SocialButton(
                                       onPressed: isSocialLoading
@@ -652,7 +956,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ),
                                 ],
                               ),
+
                               const SizedBox(height: 25),
+
+                              // ==================================================
+                              // LOGIN
+                              // ==================================================
+
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.center,
@@ -674,7 +984,8 @@ class _RegisterPageState extends State<RegisterPage> {
                                     child: const Text(
                                       'Login',
                                       style: TextStyle(
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight:
+                                            FontWeight.bold,
                                         color:
                                             Color(0xFF5B5FEF),
                                       ),
@@ -686,6 +997,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           ),
                         ),
                       ),
+
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -698,6 +1010,10 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 }
+
+// ============================================================
+// SOCIAL BUTTON
+// ============================================================
 
 class _SocialButton extends StatelessWidget {
   final VoidCallback? onPressed;

@@ -35,15 +35,28 @@ class AuthState {
       errorMessage: clearError
           ? null
           : errorMessage ?? this.errorMessage,
-      user: clearUser ? null : user ?? this.user,
+      user: clearUser
+          ? null
+          : user ?? this.user,
     );
   }
 }
 
 class AuthCubit extends Cubit<AuthState> {
-  AuthCubit() : super(const AuthState());
+  AuthCubit()
+      : super(
+          AuthState(
+            status: FirebaseAuth.instance.currentUser != null
+                ? AuthStatus.success
+                : AuthStatus.initial,
+            user: FirebaseAuth.instance.currentUser,
+          ),
+        ) {
+    _listenToAuthChanges();
+  }
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseAuth _auth =
+      FirebaseAuth.instance;
 
   final FirebaseFirestore _firestore =
       FirebaseFirestore.instance;
@@ -51,8 +64,13 @@ class AuthCubit extends Cubit<AuthState> {
   final GoogleSignIn _googleSignIn =
       GoogleSignIn.instance;
 
-  late final Future<void> _googleSignInInitialization =
+  late final Future<void>
+      _googleSignInInitialization =
       _initializeGoogleSignIn();
+
+  // ============================================================
+  // GOOGLE INITIALIZATION
+  // ============================================================
 
   Future<void> _initializeGoogleSignIn() async {
     await _googleSignIn.initialize(
@@ -61,7 +79,42 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
-  User? get currentUser => _auth.currentUser;
+  // ============================================================
+  // CURRENT USER
+  // ============================================================
+
+  User? get currentUser {
+    return _auth.currentUser;
+  }
+
+  // ============================================================
+  // AUTH STATE LISTENER
+  // ============================================================
+
+  void _listenToAuthChanges() {
+    _auth.authStateChanges().listen(
+      (user) {
+        if (user != null) {
+          emit(
+            AuthState(
+              status: AuthStatus.success,
+              user: user,
+            ),
+          );
+        } else {
+          emit(
+            const AuthState(
+              status: AuthStatus.initial,
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  // ============================================================
+  // REGISTER
+  // ============================================================
 
   Future<void> register({
     required String name,
@@ -77,11 +130,6 @@ class AuthCubit extends Cubit<AuthState> {
     );
 
     try {
-      debugPrint('========================================');
-      debugPrint('SCANLY REGISTER START');
-      debugPrint('Email: ${email.trim()}');
-      debugPrint('========================================');
-
       final userCredential =
           await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
@@ -99,21 +147,25 @@ class AuthCubit extends Cubit<AuthState> {
       final fullName =
           '${firstName.trim()} ${lastName.trim()}'.trim();
 
-      await user.updateDisplayName(fullName);
+      await user.updateDisplayName(
+        fullName,
+      );
 
       await user.sendEmailVerification();
 
-      await _createOrUpdateUserDocument(
-        user,
-        name: fullName,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        provider: 'email',
-      );
-
-      debugPrint('REGISTER SUCCESS');
-      debugPrint('UID: ${user.uid}');
-      debugPrint('========================================');
+      try {
+        await _createOrUpdateUserDocument(
+          user,
+          name: fullName,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          provider: 'email',
+        );
+      } catch (e) {
+        debugPrint(
+          'REGISTER FIRESTORE ERROR: $e',
+        );
+      }
 
       emit(
         AuthState(
@@ -121,16 +173,7 @@ class AuthCubit extends Cubit<AuthState> {
           user: user,
         ),
       );
-    } on FirebaseAuthException catch (e, stackTrace) {
-      debugPrint('========================================');
-      debugPrint('FIREBASE AUTH REGISTER ERROR');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Message: ${e.message}');
-      debugPrint('Plugin: ${e.plugin}');
-      debugPrint('Details: ${e.toString()}');
-      debugPrint('StackTrace: $stackTrace');
-      debugPrint('========================================');
-
+    } on FirebaseAuthException catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
@@ -140,16 +183,7 @@ class AuthCubit extends Cubit<AuthState> {
               '${e.message ?? 'No Firebase message'}',
         ),
       );
-    } on FirebaseException catch (e, stackTrace) {
-      debugPrint('========================================');
-      debugPrint('FIREBASE EXCEPTION DURING REGISTER');
-      debugPrint('Plugin: ${e.plugin}');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Message: ${e.message}');
-      debugPrint('Details: ${e.toString()}');
-      debugPrint('StackTrace: $stackTrace');
-      debugPrint('========================================');
-
+    } on FirebaseException catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
@@ -159,14 +193,7 @@ class AuthCubit extends Cubit<AuthState> {
               '${e.message ?? 'No Firebase message'}',
         ),
       );
-    } catch (e, stackTrace) {
-      debugPrint('========================================');
-      debugPrint('REGISTER UNKNOWN ERROR');
-      debugPrint('Error: $e');
-      debugPrint('Type: ${e.runtimeType}');
-      debugPrint('StackTrace: $stackTrace');
-      debugPrint('========================================');
-
+    } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
@@ -176,6 +203,10 @@ class AuthCubit extends Cubit<AuthState> {
       );
     }
   }
+
+  // ============================================================
+  // EMAIL LOGIN
+  // ============================================================
 
   Future<void> login({
     required String email,
@@ -202,10 +233,16 @@ class AuthCubit extends Cubit<AuthState> {
         );
       }
 
-      await _createOrUpdateUserDocument(
-        user,
-        provider: 'email',
-      );
+      try {
+        await _createOrUpdateUserDocument(
+          user,
+          provider: 'email',
+        );
+      } catch (e) {
+        debugPrint(
+          'LOGIN FIRESTORE ERROR: $e',
+        );
+      }
 
       emit(
         AuthState(
@@ -213,12 +250,7 @@ class AuthCubit extends Cubit<AuthState> {
           user: user,
         ),
       );
-    } on FirebaseAuthException catch (e, stackTrace) {
-      debugPrint('LOGIN AUTH ERROR');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Message: ${e.message}');
-      debugPrint('StackTrace: $stackTrace');
-
+    } on FirebaseAuthException catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
@@ -228,27 +260,7 @@ class AuthCubit extends Cubit<AuthState> {
               '${e.message ?? 'No Firebase message'}',
         ),
       );
-    } on FirebaseException catch (e, stackTrace) {
-      debugPrint('LOGIN FIREBASE ERROR');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Message: ${e.message}');
-      debugPrint('StackTrace: $stackTrace');
-
-      emit(
-        AuthState(
-          status: AuthStatus.failure,
-          errorMessage:
-              'Firebase error: '
-              '${e.code}\n'
-              '${e.message ?? 'No Firebase message'}',
-        ),
-      );
-    } catch (e, stackTrace) {
-      debugPrint('LOGIN UNKNOWN ERROR');
-      debugPrint('Error: $e');
-      debugPrint('Type: ${e.runtimeType}');
-      debugPrint('StackTrace: $stackTrace');
-
+    } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
@@ -259,6 +271,10 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  // ============================================================
+  // GOOGLE LOGIN
+  // ============================================================
+
   Future<void> signInWithGoogle() async {
     emit(
       const AuthState(
@@ -267,7 +283,15 @@ class AuthCubit extends Cubit<AuthState> {
     );
 
     try {
+      debugPrint(
+        'GOOGLE: Waiting for initialization...',
+      );
+
       await _googleSignInInitialization;
+
+      debugPrint(
+        'GOOGLE: Initialization completed.',
+      );
 
       if (!_googleSignIn.supportsAuthenticate()) {
         throw Exception(
@@ -275,15 +299,22 @@ class AuthCubit extends Cubit<AuthState> {
         );
       }
 
-      await _googleSignIn.signOut();
+      debugPrint(
+        'GOOGLE: Opening account picker...',
+      );
 
       final GoogleSignInAccount googleUser =
           await _googleSignIn.authenticate();
 
+      debugPrint(
+        'GOOGLE: Account selected: ${googleUser.email}',
+      );
+
       final GoogleSignInAuthentication googleAuth =
           googleUser.authentication;
 
-      final String? idToken = googleAuth.idToken;
+      final String? idToken =
+          googleAuth.idToken;
 
       if (idToken == null || idToken.isEmpty) {
         throw Exception(
@@ -291,17 +322,26 @@ class AuthCubit extends Cubit<AuthState> {
         );
       }
 
-      final credential =
+      debugPrint(
+        'GOOGLE: ID token received.',
+      );
+
+      final OAuthCredential credential =
           GoogleAuthProvider.credential(
         idToken: idToken,
       );
 
-      final userCredential =
+      debugPrint(
+        'GOOGLE: Signing in to Firebase...',
+      );
+
+      final UserCredential userCredential =
           await _auth.signInWithCredential(
         credential,
       );
 
-      final user = userCredential.user;
+      final User? user =
+          userCredential.user;
 
       if (user == null) {
         throw Exception(
@@ -309,10 +349,15 @@ class AuthCubit extends Cubit<AuthState> {
         );
       }
 
-      await _createOrUpdateUserDocument(
-        user,
-        provider: 'google',
+      debugPrint(
+        'GOOGLE: Firebase login successful: ${user.email}',
       );
+
+      // ========================================================
+      // IMPORTANT:
+      // Google authentication succeeded.
+      // Emit success BEFORE Firestore.
+      // ========================================================
 
       emit(
         AuthState(
@@ -320,11 +365,38 @@ class AuthCubit extends Cubit<AuthState> {
           user: user,
         ),
       );
-    } on GoogleSignInException catch (e, stackTrace) {
-      debugPrint('GOOGLE SIGN-IN ERROR');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Description: ${e.description}');
-      debugPrint('StackTrace: $stackTrace');
+
+      debugPrint(
+        'GOOGLE: AuthStatus.success emitted.',
+      );
+
+      // ========================================================
+      // FIRESTORE
+      // Do not let Firestore block Google navigation.
+      // ========================================================
+
+      try {
+        await _createOrUpdateUserDocument(
+          user,
+          provider: 'google',
+        );
+
+        debugPrint(
+          'GOOGLE: Firestore user document saved.',
+        );
+      } catch (e) {
+        debugPrint(
+          'GOOGLE: Firestore error: $e',
+        );
+      }
+    } on GoogleSignInException catch (e) {
+      debugPrint(
+        'GOOGLE SIGN-IN EXCEPTION: ${e.code}',
+      );
+
+      debugPrint(
+        'GOOGLE DESCRIPTION: ${e.description}',
+      );
 
       if (e.code ==
           GoogleSignInExceptionCode.canceled) {
@@ -333,6 +405,7 @@ class AuthCubit extends Cubit<AuthState> {
             status: AuthStatus.initial,
           ),
         );
+
         return;
       }
 
@@ -345,11 +418,14 @@ class AuthCubit extends Cubit<AuthState> {
               '${e.description ?? 'Unknown error'}',
         ),
       );
-    } on FirebaseAuthException catch (e, stackTrace) {
-      debugPrint('GOOGLE FIREBASE AUTH ERROR');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Message: ${e.message}');
-      debugPrint('StackTrace: $stackTrace');
+    } on FirebaseAuthException catch (e) {
+      debugPrint(
+        'GOOGLE FIREBASE ERROR: ${e.code}',
+      );
+
+      debugPrint(
+        'GOOGLE FIREBASE MESSAGE: ${e.message}',
+      );
 
       emit(
         AuthState(
@@ -360,11 +436,10 @@ class AuthCubit extends Cubit<AuthState> {
               '${_getErrorMessage(e.code)}',
         ),
       );
-    } catch (e, stackTrace) {
-      debugPrint('GOOGLE UNKNOWN ERROR');
-      debugPrint('Error: $e');
-      debugPrint('Type: ${e.runtimeType}');
-      debugPrint('StackTrace: $stackTrace');
+    } catch (e) {
+      debugPrint(
+        'GOOGLE ERROR: $e',
+      );
 
       emit(
         AuthState(
@@ -376,6 +451,10 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  // ============================================================
+  // FACEBOOK LOGIN
+  // ============================================================
+
   Future<void> signInWithFacebook() async {
     emit(
       const AuthState(
@@ -385,7 +464,11 @@ class AuthCubit extends Cubit<AuthState> {
 
     try {
       final LoginResult loginResult =
-          await FacebookAuth.instance.login();
+          await FacebookAuth.instance.login(
+        permissions: <String>[
+          'public_profile',
+        ],
+      );
 
       if (loginResult.status !=
           LoginStatus.success) {
@@ -396,6 +479,7 @@ class AuthCubit extends Cubit<AuthState> {
               status: AuthStatus.initial,
             ),
           );
+
           return;
         }
 
@@ -424,7 +508,8 @@ class AuthCubit extends Cubit<AuthState> {
         credential,
       );
 
-      final user = userCredential.user;
+      final user =
+          userCredential.user;
 
       if (user == null) {
         throw Exception(
@@ -432,10 +517,10 @@ class AuthCubit extends Cubit<AuthState> {
         );
       }
 
-      await _createOrUpdateUserDocument(
-        user,
-        provider: 'facebook',
-      );
+      // ========================================================
+      // Facebook authentication succeeded.
+      // Emit success before Firestore.
+      // ========================================================
 
       emit(
         AuthState(
@@ -443,12 +528,18 @@ class AuthCubit extends Cubit<AuthState> {
           user: user,
         ),
       );
-    } on FirebaseAuthException catch (e, stackTrace) {
-      debugPrint('FACEBOOK FIREBASE AUTH ERROR');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Message: ${e.message}');
-      debugPrint('StackTrace: $stackTrace');
 
+      try {
+        await _createOrUpdateUserDocument(
+          user,
+          provider: 'facebook',
+        );
+      } catch (e) {
+        debugPrint(
+          'FACEBOOK FIRESTORE ERROR: $e',
+        );
+      }
+    } on FirebaseAuthException catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
@@ -458,12 +549,7 @@ class AuthCubit extends Cubit<AuthState> {
               '${_getErrorMessage(e.code)}',
         ),
       );
-    } catch (e, stackTrace) {
-      debugPrint('FACEBOOK UNKNOWN ERROR');
-      debugPrint('Error: $e');
-      debugPrint('Type: ${e.runtimeType}');
-      debugPrint('StackTrace: $stackTrace');
-
+    } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
@@ -474,7 +560,13 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  Future<void> updateName(String name) async {
+  // ============================================================
+  // UPDATE NAME
+  // ============================================================
+
+  Future<void> updateName(
+    String name,
+  ) async {
     final user = _auth.currentUser;
 
     if (user == null) {
@@ -482,38 +574,65 @@ class AuthCubit extends Cubit<AuthState> {
     }
 
     try {
-      await user.updateDisplayName(name.trim());
+      final trimmedName =
+          name.trim();
 
-      await _createOrUpdateUserDocument(
-        user,
-        name: name.trim(),
+      await user.updateDisplayName(
+        trimmedName,
       );
 
-      emit(
-        AuthState(
-          status: AuthStatus.success,
-          user: user,
-        ),
-      );
+      await user.reload();
+
+      final updatedUser =
+          _auth.currentUser;
+
+      if (updatedUser != null) {
+        try {
+          await _createOrUpdateUserDocument(
+            updatedUser,
+            name: trimmedName,
+          );
+        } catch (e) {
+          debugPrint(
+            'UPDATE NAME FIRESTORE ERROR: $e',
+          );
+        }
+
+        emit(
+          AuthState(
+            status: AuthStatus.success,
+            user: updatedUser,
+          ),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
           errorMessage:
-              _getErrorMessage(e.code),
+              'Firebase Error: '
+              '${e.code} - '
+              '${_getErrorMessage(e.code)}',
         ),
       );
     } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
-          errorMessage: e.toString(),
+          errorMessage:
+              'Update name error: $e',
         ),
       );
     }
   }
 
-  Future<void> updateEmail(String email) async {
+  // ============================================================
+  // UPDATE EMAIL
+  // ============================================================
+
+  Future<void> updateEmail(
+    String email,
+  ) async {
     final user = _auth.currentUser;
 
     if (user == null) {
@@ -521,14 +640,23 @@ class AuthCubit extends Cubit<AuthState> {
     }
 
     try {
+      final trimmedEmail =
+          email.trim();
+
       await user.verifyBeforeUpdateEmail(
-        email.trim(),
+        trimmedEmail,
       );
 
-      await _createOrUpdateUserDocument(
-        user,
-        email: email.trim(),
-      );
+      try {
+        await _createOrUpdateUserDocument(
+          user,
+          email: trimmedEmail,
+        );
+      } catch (e) {
+        debugPrint(
+          'UPDATE EMAIL FIRESTORE ERROR: $e',
+        );
+      }
 
       emit(
         AuthState(
@@ -541,18 +669,25 @@ class AuthCubit extends Cubit<AuthState> {
         AuthState(
           status: AuthStatus.failure,
           errorMessage:
-              _getErrorMessage(e.code),
+              'Firebase Error: '
+              '${e.code} - '
+              '${_getErrorMessage(e.code)}',
         ),
       );
     } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
-          errorMessage: e.toString(),
+          errorMessage:
+              'Update email error: $e',
         ),
       );
     }
   }
+
+  // ============================================================
+  // UPDATE PASSWORD
+  // ============================================================
 
   Future<void> updatePassword(
     String newPassword,
@@ -564,7 +699,9 @@ class AuthCubit extends Cubit<AuthState> {
     }
 
     try {
-      await user.updatePassword(newPassword);
+      await user.updatePassword(
+        newPassword,
+      );
 
       emit(
         AuthState(
@@ -577,52 +714,100 @@ class AuthCubit extends Cubit<AuthState> {
         AuthState(
           status: AuthStatus.failure,
           errorMessage:
-              _getErrorMessage(e.code),
+              'Firebase Error: '
+              '${e.code} - '
+              '${_getErrorMessage(e.code)}',
         ),
       );
     } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
-          errorMessage: e.toString(),
+          errorMessage:
+              'Update password error: $e',
         ),
       );
     }
   }
+
+  // ============================================================
+  // GET USER DATA
+  // ============================================================
 
   Future<void> getUserData() async {
     final user = _auth.currentUser;
 
     if (user == null) {
+      emit(
+        const AuthState(
+          status: AuthStatus.initial,
+        ),
+      );
+
       return;
     }
 
     try {
-      await user.reload();
+      final snapshot =
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .get();
 
-      final refreshedUser =
-          _auth.currentUser;
+      if (snapshot.exists) {
+        final data =
+            snapshot.data();
+
+        if (data != null) {
+          debugPrint(
+            'User data: $data',
+          );
+        }
+      }
 
       emit(
         AuthState(
           status: AuthStatus.success,
-          user: refreshedUser,
+          user: user,
+        ),
+      );
+    } on FirebaseException catch (e) {
+      emit(
+        AuthState(
+          status: AuthStatus.failure,
+          errorMessage:
+              'Firebase Error: '
+              '${e.code}\n'
+              '${e.message ?? 'Could not get user data'}',
         ),
       );
     } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
-          errorMessage: e.toString(),
+          errorMessage:
+              'Get user data error: $e',
         ),
       );
     }
   }
 
+  // ============================================================
+  // RESEND EMAIL VERIFICATION
+  // ============================================================
+
   Future<void> resendVerificationEmail() async {
     final user = _auth.currentUser;
 
     if (user == null) {
+      emit(
+        const AuthState(
+          status: AuthStatus.failure,
+          errorMessage:
+              'No authenticated user.',
+        ),
+      );
+
       return;
     }
 
@@ -640,18 +825,25 @@ class AuthCubit extends Cubit<AuthState> {
         AuthState(
           status: AuthStatus.failure,
           errorMessage:
-              _getErrorMessage(e.code),
+              'Firebase Error: '
+              '${e.code} - '
+              '${_getErrorMessage(e.code)}',
         ),
       );
     } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
-          errorMessage: e.toString(),
+          errorMessage:
+              'Verification email error: $e',
         ),
       );
     }
   }
+
+  // ============================================================
+  // CHECK EMAIL VERIFIED
+  // ============================================================
 
   Future<bool> checkEmailVerified() async {
     final user = _auth.currentUser;
@@ -663,15 +855,33 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       await user.reload();
 
-      final refreshedUser =
+      final updatedUser =
           _auth.currentUser;
 
-      return refreshedUser?.emailVerified ??
-          false;
-    } catch (_) {
+      if (updatedUser == null) {
+        return false;
+      }
+
+      emit(
+        AuthState(
+          status: AuthStatus.success,
+          user: updatedUser,
+        ),
+      );
+
+      return updatedUser.emailVerified;
+    } catch (e) {
+      debugPrint(
+        'Check email verification error: $e',
+      );
+
       return false;
     }
   }
+
+  // ============================================================
+  // PASSWORD RESET
+  // ============================================================
 
   Future<void> sendPasswordResetEmail(
     String email,
@@ -688,8 +898,9 @@ class AuthCubit extends Cubit<AuthState> {
       );
 
       emit(
-        const AuthState(
+        AuthState(
           status: AuthStatus.success,
+          user: _auth.currentUser,
         ),
       );
     } on FirebaseAuthException catch (e) {
@@ -697,24 +908,43 @@ class AuthCubit extends Cubit<AuthState> {
         AuthState(
           status: AuthStatus.failure,
           errorMessage:
-              _getErrorMessage(e.code),
+              'Firebase Error: '
+              '${e.code} - '
+              '${_getErrorMessage(e.code)}',
         ),
       );
     } catch (e) {
       emit(
         AuthState(
           status: AuthStatus.failure,
-          errorMessage: e.toString(),
+          errorMessage:
+              'Password reset error: $e',
         ),
       );
     }
   }
 
+  // ============================================================
+  // LOGOUT
+  // ============================================================
+
   Future<void> logout() async {
     try {
-      await _googleSignIn.signOut();
+      try {
+        await _googleSignIn.signOut();
+      } catch (e) {
+        debugPrint(
+          'Google sign out error: $e',
+        );
+      }
 
-      await FacebookAuth.instance.logOut();
+      try {
+        await FacebookAuth.instance.logOut();
+      } catch (e) {
+        debugPrint(
+          'Facebook logout error: $e',
+        );
+      }
 
       await _auth.signOut();
 
@@ -727,11 +957,16 @@ class AuthCubit extends Cubit<AuthState> {
       emit(
         AuthState(
           status: AuthStatus.failure,
-          errorMessage: e.toString(),
+          errorMessage:
+              'Logout error: $e',
         ),
       );
     }
   }
+
+  // ============================================================
+  // CREATE / UPDATE FIRESTORE USER
+  // ============================================================
 
   Future<void> _createOrUpdateUserDocument(
     User user, {
@@ -742,34 +977,51 @@ class AuthCubit extends Cubit<AuthState> {
     String? provider,
   }) async {
     final userRef =
-        _firestore.collection('users').doc(user.uid);
+        _firestore
+            .collection('users')
+            .doc(user.uid);
 
-    final snapshot = await userRef.get();
+    final snapshot =
+        await userRef.get();
 
     final existingData =
         snapshot.data();
 
-    final Map<String, dynamic> data = {
+    final Map<String, dynamic> data =
+        {
       'uid': user.uid,
-      'email': email ?? user.email,
+
+      'email':
+          email ??
+          user.email ??
+          existingData?['email'] ??
+          '',
+
       'name':
           name ??
           user.displayName ??
           existingData?['name'] ??
           '',
+
       'firstName':
           firstName ??
           existingData?['firstName'] ??
           '',
+
       'lastName':
           lastName ??
           existingData?['lastName'] ??
           '',
+
       'photoUrl':
           user.photoURL ??
           existingData?['photoUrl'],
-      'emailVerified': user.emailVerified,
-      'updatedAt': FieldValue.serverTimestamp(),
+
+      'emailVerified':
+          user.emailVerified,
+
+      'updatedAt':
+          FieldValue.serverTimestamp(),
     };
 
     if (!snapshot.exists) {
@@ -778,76 +1030,82 @@ class AuthCubit extends Cubit<AuthState> {
     }
 
     if (provider != null) {
-      data['provider'] = provider;
+      data['provider'] =
+          provider;
     }
 
-    try {
-      await userRef.set(
-        data,
-        SetOptions(merge: true),
-      );
-    } on FirebaseException catch (e, stackTrace) {
-      debugPrint('========================================');
-      debugPrint('FIRESTORE USER DOCUMENT ERROR');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Plugin: ${e.plugin}');
-      debugPrint('Message: ${e.message}');
-      debugPrint('StackTrace: $stackTrace');
-      debugPrint('========================================');
-
-      rethrow;
-    }
+    await userRef.set(
+      data,
+      SetOptions(
+        merge: true,
+      ),
+    );
   }
 
-  String _getErrorMessage(String code) {
+  // ============================================================
+  // FIREBASE ERROR MESSAGES
+  // ============================================================
+
+  String _getErrorMessage(
+    String code,
+  ) {
     switch (code) {
       case 'invalid-email':
         return 'The email address is not valid.';
 
       case 'user-disabled':
-        return 'This account has been disabled.';
+        return 'This user account has been disabled.';
 
       case 'user-not-found':
-        return 'No account found with this email.';
+        return 'No account was found with this email.';
 
       case 'wrong-password':
+        return 'The password is incorrect.';
+
       case 'invalid-credential':
-        return 'The email or password is incorrect.';
+        return 'The provided login credential is invalid or expired.';
 
       case 'email-already-in-use':
-        return 'This email is already in use.';
+        return 'This email is already registered.';
 
       case 'weak-password':
         return 'The password is too weak.';
 
       case 'operation-not-allowed':
-        return 'This sign-in method is not enabled in Firebase.';
+        return 'This authentication method is not enabled in Firebase.';
 
       case 'too-many-requests':
         return 'Too many attempts. Please try again later.';
 
       case 'network-request-failed':
-        return 'Please check your internet connection.';
+        return 'Network error. Please check your internet connection.';
 
       case 'requires-recent-login':
-        return 'Please sign in again and try again.';
-
-      case 'user-mismatch':
-        return 'The selected account does not match.';
-
-      case 'credential-already-in-use':
-        return 'This credential is already linked to another account.';
+        return 'Please log in again before performing this action.';
 
       case 'account-exists-with-different-credential':
-        return 'This email is already registered with another sign-in method.';
+        return 'An account already exists with a different sign-in method.';
 
-      case 'invalid-credential':
-        return 'The authentication credential is invalid.';
+      case 'credential-already-in-use':
+        return 'This credential is already being used by another account.';
+
+      case 'provider-already-linked':
+        return 'This provider is already linked to the account.';
+
+      case 'user-token-expired':
+        return 'Your session has expired. Please log in again.';
+
+      case 'user-mismatch':
+        return 'The selected account does not match the current user.';
 
       default:
-        return 'Firebase authentication error: $code';
+        return 'Authentication error. Please try again.';
     }
   }
+
+  // ============================================================
+  // CLOSE
+  // ============================================================
 
   @override
   Future<void> close() {

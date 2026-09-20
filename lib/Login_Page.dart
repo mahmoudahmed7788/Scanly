@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +22,8 @@ class _LoginPageState extends State<LoginPage> {
   bool isGoogleLoading = false;
   bool isFacebookLoading = false;
 
+  bool isSocialLogin = false;
+
   @override
   void dispose() {
     emailController.dispose();
@@ -28,16 +31,28 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // ============================================================
+  // EMAIL LOGIN
+  // ============================================================
+
   Future<void> login() async {
     if (!formKey.currentState!.validate()) {
       return;
     }
+
+    setState(() {
+      isSocialLogin = false;
+    });
 
     await context.read<AuthCubit>().login(
           email: emailController.text.trim(),
           password: passwordController.text,
         );
   }
+
+  // ============================================================
+  // GOOGLE LOGIN
+  // ============================================================
 
   Future<void> loginWithGoogle() async {
     if (isGoogleLoading || isFacebookLoading) {
@@ -46,10 +61,54 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() {
       isGoogleLoading = true;
+      isSocialLogin = true;
     });
 
     try {
-      await context.read<AuthCubit>().signInWithGoogle();
+      final authCubit = context.read<AuthCubit>();
+
+      await authCubit.signInWithGoogle();
+
+      if (!mounted) {
+        return;
+      }
+
+      // ========================================================
+      // IMPORTANT
+      // Check Firebase directly after Google authentication.
+      // ========================================================
+
+      final User? user =
+          FirebaseAuth.instance.currentUser;
+
+      debugPrint(
+        'LOGIN PAGE GOOGLE USER: ${user?.email}',
+      );
+
+      if (user != null) {
+        debugPrint(
+          'LOGIN PAGE GOOGLE: Going to Home',
+        );
+
+        context.go('/home');
+      }
+    } catch (e) {
+      debugPrint(
+        'LOGIN PAGE GOOGLE ERROR: $e',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Google login failed: $e',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     } finally {
       if (!mounted) {
         return;
@@ -61,6 +120,10 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // ============================================================
+  // FACEBOOK LOGIN
+  // ============================================================
+
   Future<void> loginWithFacebook() async {
     if (isGoogleLoading || isFacebookLoading) {
       return;
@@ -68,10 +131,49 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() {
       isFacebookLoading = true;
+      isSocialLogin = true;
     });
 
     try {
-      await context.read<AuthCubit>().signInWithFacebook();
+      final authCubit = context.read<AuthCubit>();
+
+      await authCubit.signInWithFacebook();
+
+      if (!mounted) {
+        return;
+      }
+
+      final User? user =
+          FirebaseAuth.instance.currentUser;
+
+      debugPrint(
+        'LOGIN PAGE FACEBOOK USER: ${user?.email}',
+      );
+
+      if (user != null) {
+        debugPrint(
+          'LOGIN PAGE FACEBOOK: Going to Home',
+        );
+
+        context.go('/home');
+      }
+    } catch (e) {
+      debugPrint(
+        'LOGIN PAGE FACEBOOK ERROR: $e',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Facebook login failed: $e',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     } finally {
       if (!mounted) {
         return;
@@ -82,6 +184,10 @@ class _LoginPageState extends State<LoginPage> {
       });
     }
   }
+
+  // ============================================================
+  // FORGOT PASSWORD
+  // ============================================================
 
   Future<void> forgotPassword() async {
     final email = emailController.text.trim();
@@ -122,7 +228,8 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    final state = context.read<AuthCubit>().state;
+    final state =
+        context.read<AuthCubit>().state;
 
     if (state.status == AuthStatus.success) {
       context.push(
@@ -132,6 +239,10 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // ============================================================
+  // THEME
+  // ============================================================
+
   Future<void> toggleTheme() async {
     await ThemeController.toggleTheme();
   }
@@ -139,9 +250,11 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark =
+        theme.brightness == Brightness.dark;
 
-    final textPrimary = theme.colorScheme.onSurface;
+    final textPrimary =
+        theme.colorScheme.onSurface;
 
     final textSecondary = isDark
         ? const Color(0xFFB8B6CC)
@@ -156,29 +269,60 @@ class _LoginPageState extends State<LoginPage> {
 
     return BlocListener<AuthCubit, AuthState>(
       listener: (context, state) {
-        if (state.status == AuthStatus.success &&
+        // ======================================================
+        // SUCCESS
+        // ======================================================
+
+        if (state.status ==
+                AuthStatus.success &&
             state.user != null) {
           final user = state.user!;
+
+          // ====================================================
+          // GOOGLE / FACEBOOK
+          // ====================================================
+
+          if (isSocialLogin) {
+            context.go('/home');
+            return;
+          }
+
+          // ====================================================
+          // EMAIL LOGIN
+          // ====================================================
 
           if (user.emailVerified) {
             context.go('/home');
           } else {
             context.go('/verification');
           }
+
+          return;
         }
 
-        if (state.status == AuthStatus.failure) {
+        // ======================================================
+        // FAILURE
+        // ======================================================
+
+        if (state.status ==
+            AuthStatus.failure) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
                 state.errorMessage ??
                     'Authentication failed.',
               ),
-              backgroundColor: Colors.redAccent,
+              backgroundColor:
+                  Colors.redAccent,
             ),
           );
         }
       },
+
+      // ========================================================
+      // UI
+      // ========================================================
+
       child: Scaffold(
         body: Container(
           width: double.infinity,
@@ -198,22 +342,31 @@ class _LoginPageState extends State<LoginPage> {
             child: Stack(
               children: [
                 SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
+                  padding:
+                      const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 25,
                   ),
                   child: Column(
                     children: [
                       const SizedBox(height: 55),
+
+                      // ==================================================
+                      // LOGO
+                      // ==================================================
+
                       Container(
                         width: 90,
                         height: 90,
-                        padding: const EdgeInsets.all(14),
+                        padding:
+                            const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white
+                              .withOpacity(0.18),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.30),
+                            color: Colors.white
+                                .withOpacity(0.30),
                             width: 1,
                           ),
                         ),
@@ -222,16 +375,21 @@ class _LoginPageState extends State<LoginPage> {
                           fit: BoxFit.contain,
                         ),
                       ),
+
                       const SizedBox(height: 18),
+
                       const Text(
                         'Welcome Back',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 30,
-                          fontWeight: FontWeight.bold,
+                          fontWeight:
+                              FontWeight.bold,
                         ),
                       ),
+
                       const SizedBox(height: 8),
+
                       const Text(
                         'Login to continue to Scanly',
                         style: TextStyle(
@@ -239,18 +397,30 @@ class _LoginPageState extends State<LoginPage> {
                           fontSize: 15,
                         ),
                       ),
+
                       const SizedBox(height: 30),
+
+                      // ==================================================
+                      // CARD
+                      // ==================================================
+
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(24),
+                        padding:
+                            const EdgeInsets.all(24),
                         decoration: BoxDecoration(
                           color: cardColor,
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius:
+                              BorderRadius.circular(
+                            30,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.12),
+                              color: Colors.black
+                                  .withOpacity(0.12),
                               blurRadius: 25,
-                              offset: const Offset(0, 10),
+                              offset:
+                                  const Offset(0, 10),
                             ),
                           ],
                         ),
@@ -258,30 +428,44 @@ class _LoginPageState extends State<LoginPage> {
                           key: formKey,
                           child: Column(
                             children: [
+                              // ==================================================
+                              // EMAIL
+                              // ==================================================
+
                               TextFormField(
-                                controller: emailController,
+                                controller:
+                                    emailController,
                                 keyboardType:
-                                    TextInputType.emailAddress,
+                                    TextInputType
+                                        .emailAddress,
                                 textInputAction:
-                                    TextInputAction.next,
+                                    TextInputAction
+                                        .next,
                                 decoration:
                                     const InputDecoration(
                                   hintText: 'Email',
-                                  prefixIcon: Icon(
-                                    Icons.email_outlined,
+                                  prefixIcon:
+                                      Icon(
+                                    Icons
+                                        .email_outlined,
                                   ),
                                 ),
                                 validator: (value) {
-                                  if (value == null ||
-                                      value.trim().isEmpty) {
+                                  if (value ==
+                                          null ||
+                                      value
+                                          .trim()
+                                          .isEmpty) {
                                     return 'Enter your email';
                                   }
 
-                                  final emailRegex = RegExp(
+                                  final emailRegex =
+                                      RegExp(
                                     r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
                                   );
 
-                                  if (!emailRegex.hasMatch(
+                                  if (!emailRegex
+                                      .hasMatch(
                                     value.trim(),
                                   )) {
                                     return 'Enter a valid email';
@@ -290,18 +474,34 @@ class _LoginPageState extends State<LoginPage> {
                                   return null;
                                 },
                               ),
-                              const SizedBox(height: 15),
+
+                              const SizedBox(
+                                height: 15,
+                              ),
+
+                              // ==================================================
+                              // PASSWORD
+                              // ==================================================
+
                               TextFormField(
-                                controller: passwordController,
-                                obscureText: obscurePassword,
+                                controller:
+                                    passwordController,
+                                obscureText:
+                                    obscurePassword,
                                 textInputAction:
-                                    TextInputAction.done,
-                                decoration: InputDecoration(
-                                  hintText: 'Password',
-                                  prefixIcon: const Icon(
-                                    Icons.lock_outline_rounded,
+                                    TextInputAction
+                                        .done,
+                                decoration:
+                                    InputDecoration(
+                                  hintText:
+                                      'Password',
+                                  prefixIcon:
+                                      const Icon(
+                                    Icons
+                                        .lock_outline_rounded,
                                   ),
-                                  suffixIcon: IconButton(
+                                  suffixIcon:
+                                      IconButton(
                                     onPressed: () {
                                       setState(() {
                                         obscurePassword =
@@ -318,7 +518,8 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 ),
                                 validator: (value) {
-                                  if (value == null ||
+                                  if (value ==
+                                          null ||
                                       value.isEmpty) {
                                     return 'Enter your password';
                                   }
@@ -326,178 +527,301 @@ class _LoginPageState extends State<LoginPage> {
                                   return null;
                                 },
                               ),
-                              const SizedBox(height: 8),
+
+                              const SizedBox(
+                                height: 8,
+                              ),
+
+                              // ==================================================
+                              // FORGOT PASSWORD
+                              // ==================================================
+
                               Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: isSocialLoading
-                                      ? null
-                                      : forgotPassword,
-                                  child: const Text(
+                                alignment:
+                                    Alignment
+                                        .centerRight,
+                                child:
+                                    TextButton(
+                                  onPressed:
+                                      isSocialLoading
+                                          ? null
+                                          : forgotPassword,
+                                  child:
+                                      const Text(
                                     'Forgot Password?',
-                                    style: TextStyle(
-                                      color: Color(0xFF5B5FEF),
-                                      fontWeight: FontWeight.w600,
+                                    style:
+                                        TextStyle(
+                                      color:
+                                          Color(
+                                        0xFF5B5FEF,
+                                      ),
+                                      fontWeight:
+                                          FontWeight
+                                              .w600,
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 10),
-                              BlocBuilder<AuthCubit, AuthState>(
-                                builder: (context, state) {
+
+                              const SizedBox(
+                                height: 10,
+                              ),
+
+                              // ==================================================
+                              // LOGIN BUTTON
+                              // ==================================================
+
+                              BlocBuilder<
+                                  AuthCubit,
+                                  AuthState>(
+                                builder:
+                                    (context, state) {
                                   final isLoading =
                                       state.status ==
-                                          AuthStatus.loading;
+                                          AuthStatus
+                                              .loading;
 
                                   return SizedBox(
-                                    width: double.infinity,
+                                    width:
+                                        double.infinity,
                                     height: 55,
-                                    child: ElevatedButton(
+                                    child:
+                                        ElevatedButton(
                                       onPressed:
                                           isLoading ||
                                                   isSocialLoading
                                               ? null
                                               : login,
                                       style:
-                                          ElevatedButton.styleFrom(
+                                          ElevatedButton
+                                              .styleFrom(
                                         backgroundColor:
-                                            const Color(0xFF5B5FEF),
+                                            const Color(
+                                          0xFF5B5FEF,
+                                        ),
                                         foregroundColor:
-                                            Colors.white,
+                                            Colors
+                                                .white,
                                         disabledBackgroundColor:
-                                            const Color(0xFF5B5FEF)
-                                                .withOpacity(0.55),
+                                            const Color(
+                                          0xFF5B5FEF,
+                                        ).withOpacity(
+                                          0.55,
+                                        ),
                                         elevation: 0,
                                         shape:
                                             RoundedRectangleBorder(
                                           borderRadius:
-                                              BorderRadius.circular(18),
+                                              BorderRadius
+                                                  .circular(
+                                            18,
+                                          ),
                                         ),
                                       ),
                                       child: isLoading &&
                                               !isSocialLoading
                                           ? const SizedBox(
-                                              width: 24,
-                                              height: 24,
+                                              width:
+                                                  24,
+                                              height:
+                                                  24,
                                               child:
                                                   CircularProgressIndicator(
-                                                strokeWidth: 2.5,
-                                                color: Colors.white,
+                                                strokeWidth:
+                                                    2.5,
+                                                color:
+                                                    Colors.white,
                                               ),
                                             )
                                           : const Text(
                                               'Login',
-                                              style: TextStyle(
-                                                fontSize: 16,
+                                              style:
+                                                  TextStyle(
+                                                fontSize:
+                                                    16,
                                                 fontWeight:
-                                                    FontWeight.bold,
+                                                    FontWeight
+                                                        .bold,
                                               ),
                                             ),
                                     ),
                                   );
                                 },
                               ),
-                              const SizedBox(height: 25),
+
+                              const SizedBox(
+                                height: 25,
+                              ),
+
+                              // ==================================================
+                              // DIVIDER
+                              // ==================================================
+
                               Row(
                                 children: [
                                   Expanded(
-                                    child: Divider(
-                                      color: textSecondary
-                                          .withOpacity(0.25),
+                                    child:
+                                        Divider(
+                                      color:
+                                          textSecondary
+                                              .withOpacity(
+                                        0.25,
+                                      ),
                                     ),
                                   ),
                                   Padding(
                                     padding:
-                                        const EdgeInsets.symmetric(
-                                      horizontal: 14,
+                                        const EdgeInsets
+                                            .symmetric(
+                                      horizontal:
+                                          14,
                                     ),
                                     child: Text(
                                       'OR CONTINUE WITH',
-                                      style: TextStyle(
-                                        color: textSecondary,
+                                      style:
+                                          TextStyle(
+                                        color:
+                                            textSecondary,
                                         fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 0.7,
+                                        fontWeight:
+                                            FontWeight
+                                                .w600,
+                                        letterSpacing:
+                                            0.7,
                                       ),
                                     ),
                                   ),
                                   Expanded(
-                                    child: Divider(
-                                      color: textSecondary
-                                          .withOpacity(0.25),
+                                    child:
+                                        Divider(
+                                      color:
+                                          textSecondary
+                                              .withOpacity(
+                                        0.25,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 20),
+
+                              const SizedBox(
+                                height: 20,
+                              ),
+
+                              // ==================================================
+                              // GOOGLE + FACEBOOK
+                              // ==================================================
+
                               Row(
                                 children: [
                                   Expanded(
-                                    child: _SocialButton(
-                                      onPressed: isSocialLoading
-                                          ? null
-                                          : loginWithGoogle,
-                                      icon: const Text(
+                                    child:
+                                        _SocialButton(
+                                      onPressed:
+                                          isSocialLoading
+                                              ? null
+                                              : loginWithGoogle,
+                                      icon:
+                                          const Text(
                                         'G',
-                                        style: TextStyle(
-                                          fontSize: 21,
+                                        style:
+                                            TextStyle(
+                                          fontSize:
+                                              21,
                                           fontWeight:
-                                              FontWeight.bold,
+                                              FontWeight
+                                                  .bold,
                                         ),
                                       ),
-                                      label: 'Google',
-                                      isLoading: isGoogleLoading,
-                                      foregroundColor: textPrimary,
+                                      label:
+                                          'Google',
+                                      isLoading:
+                                          isGoogleLoading,
+                                      foregroundColor:
+                                          textPrimary,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+
+                                  const SizedBox(
+                                    width: 12,
+                                  ),
+
                                   Expanded(
-                                    child: _SocialButton(
-                                      onPressed: isSocialLoading
-                                          ? null
-                                          : loginWithFacebook,
-                                      icon: const Text(
+                                    child:
+                                        _SocialButton(
+                                      onPressed:
+                                          isSocialLoading
+                                              ? null
+                                              : loginWithFacebook,
+                                      icon:
+                                          const Text(
                                         'f',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 22,
+                                        style:
+                                            TextStyle(
+                                          color: Colors
+                                              .white,
+                                          fontSize:
+                                              22,
                                           fontWeight:
-                                              FontWeight.bold,
+                                              FontWeight
+                                                  .bold,
                                         ),
                                       ),
-                                      label: 'Facebook',
+                                      label:
+                                          'Facebook',
                                       isLoading:
                                           isFacebookLoading,
                                       facebook: true,
-                                      foregroundColor: textPrimary,
+                                      foregroundColor:
+                                          textPrimary,
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 25),
+
+                              const SizedBox(
+                                height: 25,
+                              ),
+
+                              // ==================================================
+                              // REGISTER
+                              // ==================================================
+
                               Row(
                                 mainAxisAlignment:
-                                    MainAxisAlignment.center,
+                                    MainAxisAlignment
+                                        .center,
                                 children: [
                                   Text(
                                     'Don\'t have an account? ',
-                                    style: TextStyle(
-                                      color: textSecondary,
+                                    style:
+                                        TextStyle(
+                                      color:
+                                          textSecondary,
                                     ),
                                   ),
                                   TextButton(
-                                    onPressed: isSocialLoading
-                                        ? null
-                                        : () {
-                                            context.push(
-                                              '/register',
-                                            );
-                                          },
-                                    child: const Text(
+                                    onPressed:
+                                        isSocialLoading
+                                            ? null
+                                            : () {
+                                                context
+                                                    .push(
+                                                  '/register',
+                                                );
+                                              },
+                                    child:
+                                        const Text(
                                       'Create Account',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF5B5FEF),
+                                      style:
+                                          TextStyle(
+                                        fontWeight:
+                                            FontWeight
+                                                .bold,
+                                        color:
+                                            Color(
+                                          0xFF5B5FEF,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -507,68 +831,124 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+
+                      const SizedBox(
+                        height: 20,
+                      ),
                     ],
                   ),
                 ),
+
+                // ============================================================
+                // THEME BUTTON
+                // ============================================================
+
                 Positioned(
                   top: 12,
                   right: 20,
-                  child: ValueListenableBuilder<ThemeMode>(
-                    valueListenable: ThemeController.mode,
-                    builder: (context, mode, _) {
+                  child:
+                      ValueListenableBuilder<
+                          ThemeMode>(
+                    valueListenable:
+                        ThemeController.mode,
+                    builder:
+                        (context, mode, _) {
                       final isDarkMode =
-                          mode == ThemeMode.dark;
+                          mode ==
+                              ThemeMode.dark;
 
                       return Material(
-                        color: Colors.transparent,
+                        color:
+                            Colors.transparent,
                         child: InkWell(
                           onTap: toggleTheme,
                           borderRadius:
-                              BorderRadius.circular(50),
-                          child: AnimatedContainer(
+                              BorderRadius
+                                  .circular(
+                            50,
+                          ),
+                          child:
+                              AnimatedContainer(
                             duration:
-                                const Duration(milliseconds: 250),
-                            curve: Curves.easeOut,
+                                const Duration(
+                              milliseconds: 250,
+                            ),
+                            curve:
+                                Curves.easeOut,
                             width: 48,
                             height: 48,
-                            decoration: BoxDecoration(
+                            decoration:
+                                BoxDecoration(
                               color: isDarkMode
-                                  ? Colors.white.withOpacity(0.25)
-                                  : Colors.white.withOpacity(0.18),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.35),
+                                  ? Colors.white
+                                      .withOpacity(
+                                      0.25,
+                                    )
+                                  : Colors.white
+                                      .withOpacity(
+                                      0.18,
+                                    ),
+                              shape:
+                                  BoxShape.circle,
+                              border:
+                                  Border.all(
+                                color: Colors
+                                    .white
+                                    .withOpacity(
+                                  0.35,
+                                ),
                                 width: 1,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color:
-                                      Colors.black.withOpacity(0.10),
+                                  color: Colors
+                                      .black
+                                      .withOpacity(
+                                    0.10,
+                                  ),
                                   blurRadius: 12,
-                                  offset: const Offset(0, 5),
+                                  offset:
+                                      const Offset(
+                                    0,
+                                    5,
+                                  ),
                                 ),
                               ],
                             ),
-                            child: AnimatedSwitcher(
+                            child:
+                                AnimatedSwitcher(
                               duration:
-                                  const Duration(milliseconds: 200),
+                                  const Duration(
+                                milliseconds: 200,
+                              ),
                               transitionBuilder:
-                                  (child, animation) {
+                                  (
+                                child,
+                                animation,
+                              ) {
                                 return RotationTransition(
-                                  turns: animation,
-                                  child: FadeTransition(
-                                    opacity: animation,
-                                    child: child,
+                                  turns:
+                                      animation,
+                                  child:
+                                      FadeTransition(
+                                    opacity:
+                                        animation,
+                                    child:
+                                        child,
                                   ),
                                 );
                               },
                               child: Icon(
                                 isDarkMode
-                                    ? Icons.light_mode_rounded
-                                    : Icons.dark_mode_rounded,
-                                key: ValueKey(isDarkMode),
-                                color: Colors.white,
+                                    ? Icons
+                                        .light_mode_rounded
+                                    : Icons
+                                        .dark_mode_rounded,
+                                key: ValueKey(
+                                  isDarkMode,
+                                ),
+                                color:
+                                    Colors.white,
                                 size: 22,
                               ),
                             ),
@@ -586,6 +966,10 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 }
+
+// ============================================================
+// SOCIAL BUTTON
+// ============================================================
 
 class _SocialButton extends StatelessWidget {
   final VoidCallback? onPressed;
@@ -606,24 +990,30 @@ class _SocialButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = Theme.of(context)
-        .colorScheme
-        .onSurface
-        .withOpacity(0.12);
+    final borderColor =
+        Theme.of(context)
+            .colorScheme
+            .onSurface
+            .withOpacity(0.12);
 
     return SizedBox(
       height: 52,
       child: OutlinedButton(
         onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: foregroundColor,
+        style:
+            OutlinedButton.styleFrom(
+          foregroundColor:
+              foregroundColor,
           side: BorderSide(
             color: borderColor,
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(16),
           ),
-          padding: const EdgeInsets.symmetric(
+          padding:
+              const EdgeInsets.symmetric(
             horizontal: 10,
           ),
         ),
@@ -631,36 +1021,56 @@ class _SocialButton extends StatelessWidget {
             ? SizedBox(
                 width: 21,
                 height: 21,
-                child: CircularProgressIndicator(
+                child:
+                    CircularProgressIndicator(
                   strokeWidth: 2.2,
                   color: facebook
-                      ? const Color(0xFF1877F2)
-                      : const Color(0xFF5B5FEF),
+                      ? const Color(
+                          0xFF1877F2,
+                        )
+                      : const Color(
+                          0xFF5B5FEF,
+                        ),
                 ),
               )
             : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment:
+                    MainAxisAlignment
+                        .center,
                 children: [
                   Container(
                     width: 30,
                     height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
+                    alignment:
+                        Alignment.center,
+                    decoration:
+                        BoxDecoration(
                       color: facebook
-                          ? const Color(0xFF1877F2)
-                          : Colors.transparent,
-                      shape: BoxShape.circle,
+                          ? const Color(
+                              0xFF1877F2,
+                            )
+                          : Colors
+                              .transparent,
+                      shape:
+                          BoxShape.circle,
                     ),
                     child: icon,
                   ),
-                  const SizedBox(width: 7),
+                  const SizedBox(
+                    width: 7,
+                  ),
                   Flexible(
                     child: Text(
                       label,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      overflow:
+                          TextOverflow
+                              .ellipsis,
+                      style:
+                          const TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontWeight:
+                            FontWeight
+                                .w600,
                       ),
                     ),
                   ),
@@ -670,3 +1080,4 @@ class _SocialButton extends StatelessWidget {
     );
   }
 }
+

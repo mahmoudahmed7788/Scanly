@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:scanly/DocumentModel.dart';
 import 'package:scanly/ScanlyActivityService.dart';
@@ -12,21 +12,20 @@ class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
 
   @override
-  State<FavoritesPage> createState() =>
-      _FavoritesPageState();
+  State<FavoritesPage> createState() => _FavoritesPageState();
 }
 
 class _FavoritesPageState extends State<FavoritesPage>
     with WidgetsBindingObserver {
+  static const String _qrFavoritesKey = 'qr_favorites';
+
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
 
-    ScanlyActivityService.version.addListener(
-      _refresh,
-    );
+    ScanlyActivityService.version.addListener(_refresh);
 
     _loadDocuments();
   }
@@ -35,9 +34,7 @@ class _FavoritesPageState extends State<FavoritesPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
 
-    ScanlyActivityService.version.removeListener(
-      _refresh,
-    );
+    ScanlyActivityService.version.removeListener(_refresh);
 
     super.dispose();
   }
@@ -52,13 +49,17 @@ class _FavoritesPageState extends State<FavoritesPage>
   }
 
   void _refresh() {
-    if (mounted) {
-      setState(() {});
-    }
+    if (!mounted) return;
+
+    setState(() {});
   }
 
   Future<void> _loadDocuments() async {
-    await DocumentStorage.syncFromDisk();
+    try {
+      await DocumentStorage.syncFromDisk();
+    } catch (e) {
+      debugPrint('Favorites sync error: $e');
+    }
 
     if (!mounted) return;
 
@@ -66,17 +67,36 @@ class _FavoritesPageState extends State<FavoritesPage>
   }
 
   List<DocumentModel> _favoriteDocuments() {
-    return DocumentStorage.getDocuments()
+    final documents = DocumentStorage.getDocuments()
         .where(
-          (document) =>
-              document.isFavorite &&
-              document.type.toLowerCase() == 'pdf',
+          (document) => document.isFavorite,
         )
         .toList();
+
+    documents.sort((a, b) {
+      final dateA = DateTime.tryParse(a.date);
+      final dateB = DateTime.tryParse(b.date);
+
+      if (dateA == null && dateB == null) {
+        return 0;
+      }
+
+      if (dateA == null) {
+        return 1;
+      }
+
+      if (dateB == null) {
+        return -1;
+      }
+
+      return dateB.compareTo(dateA);
+    });
+
+    return documents;
   }
 
   IconData _iconForType(String type) {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'qr':
         return Icons.qr_code_rounded;
 
@@ -100,9 +120,7 @@ class _FavoritesPageState extends State<FavoritesPage>
   Future<void> _openItem(
     ScanlyItem item,
   ) async {
-    await ScanlyActivityService.addRecent(
-      item,
-    );
+    await ScanlyActivityService.addRecent(item);
 
     if (!mounted) return;
 
@@ -121,9 +139,7 @@ class _FavoritesPageState extends State<FavoritesPage>
   Future<void> _openDocument(
     DocumentModel document,
   ) async {
-    await DocumentStorage.markAsOpened(
-      document,
-    );
+    await DocumentStorage.markAsOpened(document);
 
     if (!mounted) return;
 
@@ -138,7 +154,9 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     if (!await file.exists()) {
       _showMessage('PDF file no longer exists');
+
       await _loadDocuments();
+
       return;
     }
 
@@ -146,6 +164,7 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     if (bytes.isEmpty) {
       _showMessage('PDF file is empty');
+
       return;
     }
 
@@ -170,6 +189,10 @@ class _FavoritesPageState extends State<FavoritesPage>
     await ScanlyActivityService.removeFavorite(
       item.id,
     );
+
+    if (!mounted) return;
+
+    _showMessage('Removed from favorites');
   }
 
   Future<void> _removeDocumentFavorite(
@@ -179,19 +202,85 @@ class _FavoritesPageState extends State<FavoritesPage>
       document,
     );
 
+    if (!mounted) return;
+
+    _showMessage('Removed from favorites');
+
     await _loadDocuments();
   }
 
   Future<void> _clearFavorites() async {
-    final scanlyFavorites =
-        ScanlyActivityService.favorites;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final colors =
+            Theme.of(context).colorScheme;
 
-    for (final item in scanlyFavorites) {
-      await ScanlyActivityService.removeFavorite(
-        item.id,
-      );
-    }
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Clear Favorites',
+            style: TextStyle(
+              color: colors.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: Text(
+            'Remove all items from your favorites?',
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  context,
+                  false,
+                );
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(
+                  context,
+                  true,
+                );
+              },
+              icon: const Icon(
+                Icons.delete_sweep_rounded,
+              ),
+              label: const Text('Clear'),
+            ),
+          ],
+        );
+      },
+    );
 
+    if (confirmed != true) return;
+
+    // =========================================
+    // 1. Clear ALL global Scanly favorites
+    // =========================================
+    await ScanlyActivityService.clearFavorites();
+
+    // =========================================
+    // 2. Clear QR Favorites local storage
+    // =========================================
+    final prefs =
+        await SharedPreferences.getInstance();
+
+    await prefs.remove(
+      _qrFavoritesKey,
+    );
+
+    // =========================================
+    // 3. Clear PDF / Document favorites
+    // =========================================
     final documents = _favoriteDocuments();
 
     for (final document in documents) {
@@ -202,113 +291,119 @@ class _FavoritesPageState extends State<FavoritesPage>
       }
     }
 
+    // =========================================
+    // 4. Refresh Favorites page
+    // =========================================
+    if (!mounted) return;
+
+    setState(() {});
+
+    _showMessage(
+      'Favorites cleared',
+    );
+
     await _loadDocuments();
   }
 
-  void _showMessage(String message) {
+  void _showMessage(
+    String message,
+  ) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          behavior: SnackBarBehavior.floating,
           content: Text(message),
         ),
       );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+  String _formatDate(
+    String value,
+  ) {
+    final date =
+        DateTime.tryParse(value);
 
-    final favorites =
-        ScanlyActivityService.favorites;
+    if (date == null) {
+      return 'Unknown date';
+    }
 
-    final documentFavorites =
-        _favoriteDocuments();
+    final day =
+        date.day.toString().padLeft(2, '0');
 
-    final hasFavorites =
-        favorites.isNotEmpty ||
-        documentFavorites.isNotEmpty;
+    final month =
+        date.month.toString().padLeft(2, '0');
 
-    return Scaffold(
-      backgroundColor:
-          theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor:
-            theme.scaffoldBackgroundColor,
-        foregroundColor:
-            colors.onSurface,
-        surfaceTintColor:
-            Colors.transparent,
-        elevation: 0,
-        title: Text(
-          'Favorites',
-          style: TextStyle(
-            color: colors.onSurface,
-            fontWeight: FontWeight.bold,
+    final year =
+        date.year.toString();
+
+    final hour =
+        date.hour.toString().padLeft(2, '0');
+
+    final minute =
+        date.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/$year • $hour:$minute';
+  }
+
+  Widget _buildPdfIcon(
+    BuildContext context,
+  ) {
+    final colors =
+        Theme.of(context).colorScheme;
+
+    return Container(
+      width: 62,
+      height: 62,
+      decoration: BoxDecoration(
+        color: colors.error.withValues(
+          alpha: 0.10,
+        ),
+        borderRadius:
+            BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.error.withValues(
+            alpha: 0.18,
           ),
         ),
-        actions: [
-          if (hasFavorites)
-            IconButton(
-              tooltip: 'Clear favorites',
-              onPressed: _clearFavorites,
-              icon: Icon(
-                Icons.delete_sweep_rounded,
-                color: colors.onSurface,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            Icons.picture_as_pdf_rounded,
+            size: 35,
+            color: colors.error,
+          ),
+          Positioned(
+            bottom: 5,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 5,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: colors.error,
+                borderRadius:
+                    BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'PDF',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 7,
+                  fontWeight:
+                      FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
+          ),
         ],
       ),
-      body: !hasFavorites
-          ? _buildEmptyState(context)
-          : RefreshIndicator(
-              color: colors.primary,
-              onRefresh: _loadDocuments,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  18,
-                  12,
-                  18,
-                  30,
-                ),
-                children: [
-                  if (documentFavorites.isNotEmpty) ...[
-                    _buildSectionTitle(
-                      context,
-                      'PDF Documents',
-                      Icons.picture_as_pdf_rounded,
-                    ),
-                    const SizedBox(height: 10),
-                    ...documentFavorites.map(
-                      (document) =>
-                          _buildDocumentCard(
-                        context,
-                        document,
-                      ),
-                    ),
-                  ],
-                  if (favorites.isNotEmpty) ...[
-                    if (documentFavorites.isNotEmpty)
-                      const SizedBox(height: 22),
-                    _buildSectionTitle(
-                      context,
-                      'Other Favorites',
-                      Icons.favorite_rounded,
-                    ),
-                    const SizedBox(height: 10),
-                    ...favorites.map(
-                      (item) => _buildItemCard(
-                        context,
-                        item,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
     );
   }
 
@@ -344,45 +439,57 @@ class _FavoritesPageState extends State<FavoritesPage>
     BuildContext context,
     DocumentModel document,
   ) {
+    final theme =
+        Theme.of(context);
+
     final colors =
-        Theme.of(context).colorScheme;
+        theme.colorScheme;
 
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 10,
+      margin:
+          const EdgeInsets.only(
+        bottom: 12,
       ),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
+        color: colors.surface,
         borderRadius:
-            BorderRadius.circular(18),
+            BorderRadius.circular(20),
+        border: Border.all(
+          color:
+              colors.outlineVariant
+                  .withValues(
+            alpha: 0.35,
+          ),
+        ),
+        boxShadow: [
+          if (theme.brightness ==
+              Brightness.light)
+            BoxShadow(
+              color:
+                  colors.onSurface
+                      .withValues(
+                alpha: 0.05,
+              ),
+              blurRadius: 12,
+              offset:
+                  const Offset(0, 5),
+            ),
+        ],
       ),
       child: InkWell(
         borderRadius:
-            BorderRadius.circular(18),
+            BorderRadius.circular(20),
         onTap: () =>
             _openDocument(document),
         child: Padding(
           padding:
-              const EdgeInsets.all(15),
+              const EdgeInsets.all(14),
           child: Row(
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: colors.primary
-                      .withValues(alpha: 0.12),
-                  borderRadius:
-                      BorderRadius.circular(15),
-                ),
-                child: Icon(
-                  Icons
-                      .picture_as_pdf_rounded,
-                  color: colors.primary,
-                  size: 27,
-                ),
-              ),
+              _buildPdfIcon(context),
+
               const SizedBox(width: 14),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment:
@@ -390,7 +497,7 @@ class _FavoritesPageState extends State<FavoritesPage>
                   children: [
                     Text(
                       document.title,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow:
                           TextOverflow.ellipsis,
                       style: TextStyle(
@@ -398,22 +505,89 @@ class _FavoritesPageState extends State<FavoritesPage>
                             colors.onSurface,
                         fontSize: 16,
                         fontWeight:
-                            FontWeight.bold,
+                            FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'PDF Document',
-                      style: TextStyle(
-                        color: colors
-                            .onSurfaceVariant,
-                        fontSize: 13,
+
+                    const SizedBox(
+                      height: 7,
+                    ),
+
+                    Row(
+                      children: [
+                        Icon(
+                          Icons
+                              .schedule_rounded,
+                          size: 14,
+                          color: colors
+                              .onSurfaceVariant,
+                        ),
+                        const SizedBox(
+                          width: 5,
+                        ),
+                        Flexible(
+                          child: Text(
+                            _formatDate(
+                              document.date,
+                            ),
+                            overflow:
+                                TextOverflow
+                                    .ellipsis,
+                            style: TextStyle(
+                              color: colors
+                                  .onSurfaceVariant,
+                              fontSize: 12,
+                              fontWeight:
+                                  FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(
+                      height: 7,
+                    ),
+
+                    Container(
+                      padding:
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration:
+                          BoxDecoration(
+                        color: colors.error
+                            .withValues(
+                          alpha: 0.09,
+                        ),
+                        borderRadius:
+                            BorderRadius
+                                .circular(7),
+                      ),
+                      child: Text(
+                        'PDF',
+                        style: TextStyle(
+                          color:
+                              colors.error,
+                          fontSize: 10,
+                          fontWeight:
+                              FontWeight.w800,
+                          letterSpacing:
+                              0.5,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+
+              const SizedBox(width: 4),
+
               IconButton(
+                tooltip:
+                    'Remove from favorites',
                 onPressed: () =>
                     _removeDocumentFavorite(
                   document,
@@ -434,8 +608,11 @@ class _FavoritesPageState extends State<FavoritesPage>
     BuildContext context,
     ScanlyItem item,
   ) {
+    final theme =
+        Theme.of(context);
+
     final colors =
-        Theme.of(context).colorScheme;
+        theme.colorScheme;
 
     return Dismissible(
       key: ValueKey(
@@ -444,13 +621,21 @@ class _FavoritesPageState extends State<FavoritesPage>
       direction:
           DismissDirection.endToStart,
       background: Container(
-        alignment: Alignment.centerRight,
+        margin:
+            const EdgeInsets.only(
+          bottom: 12,
+        ),
+        alignment:
+            Alignment.centerRight,
         padding:
-            const EdgeInsets.only(right: 20),
-        decoration: BoxDecoration(
-          color: Colors.redAccent,
+            const EdgeInsets.only(
+          right: 20,
+        ),
+        decoration:
+            BoxDecoration(
+          color: colors.error,
           borderRadius:
-              BorderRadius.circular(18),
+              BorderRadius.circular(20),
         ),
         child: const Icon(
           Icons.delete_outline_rounded,
@@ -461,84 +646,166 @@ class _FavoritesPageState extends State<FavoritesPage>
         _removeFavorite(item);
       },
       child: Container(
-        margin: const EdgeInsets.only(
-          bottom: 10,
+        margin:
+            const EdgeInsets.only(
+          bottom: 12,
         ),
-        child: Material(
-          color:
-              colors.surfaceContainerHighest,
+        decoration:
+            BoxDecoration(
+          color: colors.surface,
           borderRadius:
-              BorderRadius.circular(18),
-          child: InkWell(
-            borderRadius:
-                BorderRadius.circular(18),
-            onTap: () => _openItem(item),
-            child: Padding(
-              padding:
-                  const EdgeInsets.all(15),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: colors.primary
-                          .withValues(
-                        alpha: 0.12,
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(15),
+              BorderRadius.circular(20),
+          border: Border.all(
+            color:
+                colors.outlineVariant
+                    .withValues(
+              alpha: 0.35,
+            ),
+          ),
+          boxShadow: [
+            if (theme.brightness ==
+                Brightness.light)
+              BoxShadow(
+                color:
+                    colors.onSurface
+                        .withValues(
+                  alpha: 0.05,
+                ),
+                blurRadius: 12,
+                offset:
+                    const Offset(0, 5),
+              ),
+          ],
+        ),
+        child: InkWell(
+          borderRadius:
+              BorderRadius.circular(20),
+          onTap: () =>
+              _openItem(item),
+          child: Padding(
+            padding:
+                const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 62,
+                  height: 62,
+                  decoration:
+                      BoxDecoration(
+                    color: colors.primary
+                        .withValues(
+                      alpha: 0.10,
                     ),
-                    child: Icon(
-                      _iconForType(item.type),
-                      color: colors.primary,
-                      size: 26,
+                    borderRadius:
+                        BorderRadius.circular(
+                      16,
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow:
-                              TextOverflow.ellipsis,
+                  child: Icon(
+                    _iconForType(
+                      item.type,
+                    ),
+                    color:
+                        colors.primary,
+                    size: 30,
+                  ),
+                ),
+
+                const SizedBox(width: 14),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment
+                            .start,
+                    children: [
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style: TextStyle(
+                          color:
+                              colors.onSurface,
+                          fontSize: 16,
+                          fontWeight:
+                              FontWeight.w700,
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 6,
+                      ),
+
+                      Text(
+                        item.subtitle,
+                        maxLines: 2,
+                        overflow:
+                            TextOverflow
+                                .ellipsis,
+                        style: TextStyle(
+                          color: colors
+                              .onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 7,
+                      ),
+
+                      Container(
+                        padding:
+                            const EdgeInsets
+                                .symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration:
+                            BoxDecoration(
+                          color: colors
+                              .primary
+                              .withValues(
+                            alpha: 0.09,
+                          ),
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                            7,
+                          ),
+                        ),
+                        child: Text(
+                          item.type
+                              .toUpperCase(),
                           style: TextStyle(
                             color:
-                                colors.onSurface,
-                            fontSize: 16,
+                                colors.primary,
+                            fontSize: 10,
                             fontWeight:
-                                FontWeight.bold,
+                                FontWeight.w800,
+                            letterSpacing:
+                                0.5,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.subtitle,
-                          maxLines: 1,
-                          overflow:
-                              TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: colors
-                                .onSurfaceVariant,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    onPressed: () =>
-                        _removeFavorite(item),
-                    icon: Icon(
-                      Icons.favorite_rounded,
-                      color: colors.primary,
-                    ),
+                ),
+
+                const SizedBox(width: 4),
+
+                IconButton(
+                  tooltip:
+                      'Remove from favorites',
+                  onPressed: () =>
+                      _removeFavorite(item),
+                  icon: Icon(
+                    Icons.favorite_rounded,
+                    color: colors.error,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -557,44 +824,195 @@ class _FavoritesPageState extends State<FavoritesPage>
         padding:
             const EdgeInsets.all(30),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
             Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
+              width: 92,
+              height: 92,
+              decoration:
+                  BoxDecoration(
                 color: colors.primary
-                    .withValues(alpha: 0.10),
+                    .withValues(
+                  alpha: 0.10,
+                ),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons
                     .favorite_border_rounded,
-                size: 46,
-                color: colors.primary,
+                size: 48,
+                color:
+                    colors.primary,
               ),
             ),
-            const SizedBox(height: 18),
+
+            const SizedBox(
+              height: 20,
+            ),
+
             Text(
               'No Favorites Yet',
               style: TextStyle(
-                color: colors.onSurface,
+                color:
+                    colors.onSurface,
                 fontSize: 21,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(
+              height: 8,
+            ),
+
             Text(
               'Anything you favorite in Scanly will appear here.',
-              textAlign: TextAlign.center,
+              textAlign:
+                  TextAlign.center,
               style: TextStyle(
-                color: colors.onSurfaceVariant,
+                color: colors
+                    .onSurfaceVariant,
                 fontSize: 14,
+                height: 1.4,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final colors =
+        theme.colorScheme;
+
+    final favorites =
+        ScanlyActivityService
+            .favorites;
+
+    final documentFavorites =
+        _favoriteDocuments();
+
+    final hasFavorites =
+        favorites.isNotEmpty ||
+        documentFavorites.isNotEmpty;
+
+    return Scaffold(
+      backgroundColor:
+          theme.scaffoldBackgroundColor,
+
+      appBar: AppBar(
+        backgroundColor:
+            theme.scaffoldBackgroundColor,
+        foregroundColor:
+            colors.onSurface,
+        surfaceTintColor:
+            Colors.transparent,
+        elevation: 0,
+        title: Text(
+          'Favorites',
+          style: TextStyle(
+            color:
+                colors.onSurface,
+            fontWeight:
+                FontWeight.w700,
+          ),
+        ),
+        actions: [
+          if (hasFavorites)
+            IconButton(
+              tooltip:
+                  'Clear favorites',
+              onPressed:
+                  _clearFavorites,
+              icon: Icon(
+                Icons
+                    .delete_sweep_rounded,
+                color:
+                    colors.onSurface,
+              ),
+            ),
+        ],
+      ),
+
+      body: !hasFavorites
+          ? _buildEmptyState(
+              context,
+            )
+          : RefreshIndicator(
+              color:
+                  colors.primary,
+              onRefresh:
+                  _loadDocuments,
+              child: ListView(
+                padding:
+                    const EdgeInsets
+                        .fromLTRB(
+                  18,
+                  12,
+                  18,
+                  30,
+                ),
+                children: [
+                  if (documentFavorites
+                      .isNotEmpty) ...[
+                    _buildSectionTitle(
+                      context,
+                      'PDF Documents',
+                      Icons
+                          .picture_as_pdf_rounded,
+                    ),
+
+                    const SizedBox(
+                      height: 10,
+                    ),
+
+                    ...documentFavorites.map(
+                      (document) =>
+                          _buildDocumentCard(
+                        context,
+                        document,
+                      ),
+                    ),
+                  ],
+
+                  if (favorites
+                      .isNotEmpty) ...[
+                    if (documentFavorites
+                        .isNotEmpty)
+                      const SizedBox(
+                        height: 22,
+                      ),
+
+                    _buildSectionTitle(
+                      context,
+                      'Other Favorites',
+                      Icons
+                          .favorite_rounded,
+                    ),
+
+                    const SizedBox(
+                      height: 10,
+                    ),
+
+                    ...favorites.map(
+                      (item) =>
+                          _buildItemCard(
+                        context,
+                        item,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
     );
   }
 }

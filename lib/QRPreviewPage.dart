@@ -40,21 +40,31 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     )}';
   }
 
-  ScanlyItem get _scanlyItem {
-    String subtitle;
-
-    if (widget.value.startsWith('scanly://file?type=image')) {
-      subtitle = 'QR Image';
-    } else if (widget.value.startsWith('scanly://file?type=video')) {
-      subtitle = 'QR Video';
-    } else {
-      subtitle = widget.value;
+  String get _subtitle {
+    if (widget.value.startsWith(
+      'scanly://file?type=image',
+    )) {
+      return 'Image QR Code';
     }
 
+    if (widget.value.startsWith(
+      'scanly://file?type=video',
+    )) {
+      return 'Video QR Code';
+    }
+
+    if (widget.value.length > 45) {
+      return '${widget.value.substring(0, 45)}...';
+    }
+
+    return widget.value;
+  }
+
+  ScanlyItem get _scanlyItem {
     return ScanlyItem(
       id: _itemId,
       title: 'QR Code',
-      subtitle: subtitle,
+      subtitle: _subtitle,
       type: 'qr',
       route: '/qr-tools',
       data: widget.value,
@@ -63,21 +73,47 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
   }
 
   bool get _isFavorite {
-    return ScanlyActivityService.isFavorite(_itemId);
+    return ScanlyActivityService.isFavorite(
+      _itemId,
+    );
   }
 
+  // =====================================================
+  // SYNC FAVORITE STATE
+  // =====================================================
+
+  void _onGlobalActivityChanged() {
+    if (!mounted) return;
+
+    setState(() {});
+  }
+
+  // =====================================================
+  // TOGGLE FAVORITE
+  // =====================================================
+
   Future<void> _toggleFavorite() async {
-    if (_isFavorite) {
-      await ScanlyActivityService.removeFavorite(_itemId);
+    final currentlyFavorite = _isFavorite;
+
+    if (currentlyFavorite) {
+      await ScanlyActivityService.removeFavorite(
+        _itemId,
+      );
 
       if (mounted) {
-        _showMessage('Removed from Favorites');
+        _showMessage(
+          'Removed from Favorites',
+        );
       }
     } else {
-      await ScanlyActivityService.addFavorite(_scanlyItem);
+      await ScanlyActivityService.addFavorite(
+        _scanlyItem,
+      );
 
       if (mounted) {
-        _showMessage('Added to Favorites');
+        _showMessage(
+          'Added to Favorites',
+        );
       }
     }
 
@@ -86,9 +122,19 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     }
   }
 
+  // =====================================================
+  // RECENT
+  // =====================================================
+
   Future<void> _createRecentIfNeeded() async {
-    await ScanlyActivityService.addRecent(_scanlyItem);
+    await ScanlyActivityService.addRecent(
+      _scanlyItem,
+    );
   }
+
+  // =====================================================
+  // CREATE QR IMAGE
+  // =====================================================
 
   Future<String?> _createQRImage() async {
     try {
@@ -112,9 +158,11 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
         return null;
       }
 
-      final Uint8List bytes = byteData.buffer.asUint8List();
+      final Uint8List bytes =
+          byteData.buffer.asUint8List();
 
-      final directory = await getTemporaryDirectory();
+      final directory =
+          await getTemporaryDirectory();
 
       final file = File(
         '${directory.path}/scanly_qr_${DateTime.now().millisecondsSinceEpoch}.png',
@@ -132,6 +180,10 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     }
   }
 
+  // =====================================================
+  // SAVE QR
+  // =====================================================
+
   Future<void> _saveQR() async {
     if (_isSaving || _isSharing) {
       return;
@@ -142,7 +194,8 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     });
 
     try {
-      final imagePath = await _createQRImage();
+      final imagePath =
+          await _createQRImage();
 
       if (imagePath == null) {
         _showMessage(
@@ -151,9 +204,11 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
         return;
       }
 
-      final bytes = await File(imagePath).readAsBytes();
+      final bytes =
+          await File(imagePath).readAsBytes();
 
-      final result = await ImageGallerySaverPlus.saveImage(
+      final result =
+          await ImageGallerySaverPlus.saveImage(
         bytes,
         quality: 100,
         name:
@@ -184,6 +239,10 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     }
   }
 
+  // =====================================================
+  // SHARE TO APP
+  // =====================================================
+
   Future<void> _shareTo(
     List<String> packageNames,
   ) async {
@@ -199,9 +258,11 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     });
 
     try {
-      final imagePath = await _createQRImage();
+      final imagePath =
+          await _createQRImage();
 
-      if (imagePath == null || imagePath.isEmpty) {
+      if (imagePath == null ||
+          imagePath.isEmpty) {
         _showMessage(
           'QR Code is not ready yet',
         );
@@ -214,7 +275,8 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
         {
           'filePath': imagePath,
           'packageNames': packageNames,
-          'text': 'QR Code generated with Scanly',
+          'text':
+              'QR Code generated with Scanly',
         },
       );
 
@@ -233,7 +295,8 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       );
 
       _showMessage(
-        e.message ?? 'Could not share QR Code',
+        e.message ??
+            'Could not share QR Code',
       );
     } catch (e) {
       debugPrint(
@@ -252,6 +315,10 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     }
   }
 
+  // =====================================================
+  // SHARE MORE
+  // =====================================================
+
   Future<void> _shareMore() async {
     if (widget.value.isEmpty) {
       _showMessage(
@@ -261,7 +328,8 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     }
 
     try {
-      final imagePath = await _createQRImage();
+      final imagePath =
+          await _createQRImage();
 
       if (imagePath == null) {
         _showMessage(
@@ -274,7 +342,8 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
         'shareMore',
         {
           'filePath': imagePath,
-          'text': 'QR Code generated with Scanly',
+          'text':
+              'QR Code generated with Scanly',
         },
       );
     } on PlatformException catch (e) {
@@ -283,7 +352,8 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       );
 
       _showMessage(
-        e.message ?? 'Could not share QR Code',
+        e.message ??
+            'Could not share QR Code',
       );
     } catch (e) {
       debugPrint(
@@ -295,6 +365,10 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       );
     }
   }
+
+  // =====================================================
+  // SHARE SHEET
+  // =====================================================
 
   void _showShareSheet() {
     if (_isSaving || _isSharing) {
@@ -308,6 +382,10 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     );
   }
 
+  // =====================================================
+  // COPY
+  // =====================================================
+
   Future<void> _copyValue() async {
     await Clipboard.setData(
       ClipboardData(
@@ -320,9 +398,11 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     );
   }
 
-  void _showMessage(
-    String message,
-  ) {
+  // =====================================================
+  // MESSAGE
+  // =====================================================
+
+  void _showMessage(String message) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
@@ -330,23 +410,52 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          behavior: SnackBarBehavior.floating,
+          behavior:
+              SnackBarBehavior.floating,
         ),
       );
   }
+
+  // =====================================================
+  // INIT
+  // =====================================================
 
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    ScanlyActivityService.version.addListener(
+      _onGlobalActivityChanged,
+    );
+
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) {
       _createRecentIfNeeded();
     });
   }
 
+  // =====================================================
+  // DISPOSE
+  // =====================================================
+
+  @override
+  void dispose() {
+    ScanlyActivityService.version
+        .removeListener(
+      _onGlobalActivityChanged,
+    );
+
+    super.dispose();
+  }
+
+  // =====================================================
+  // BUILD
+  // =====================================================
+
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors =
+        Theme.of(context).colorScheme;
 
     final favorite = _isFavorite;
 
@@ -361,11 +470,13 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
             tooltip: favorite
                 ? 'Remove from Favorites'
                 : 'Add to Favorites',
-            onPressed: _toggleFavorite,
+            onPressed:
+                _toggleFavorite,
             icon: Icon(
               favorite
                   ? Icons.favorite_rounded
-                  : Icons.favorite_border_rounded,
+                  : Icons
+                      .favorite_border_rounded,
               color: favorite
                   ? Colors.redAccent
                   : null,
@@ -376,7 +487,8 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
+          padding:
+              const EdgeInsets.fromLTRB(
             20,
             12,
             20,
@@ -390,31 +502,46 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                     .textTheme
                     .headlineMedium,
               ),
+
               const SizedBox(height: 6),
+
               Text(
                 'Preview, save or share your QR Code',
-                textAlign: TextAlign.center,
+                textAlign:
+                    TextAlign.center,
                 style: TextStyle(
-                  color: colors.onSurfaceVariant,
+                  color:
+                      colors.onSurfaceVariant,
                 ),
               ),
+
               const SizedBox(height: 24),
+
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
+                padding:
+                    const EdgeInsets.all(20),
+                decoration:
+                    BoxDecoration(
                   color: colors.surface,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius:
+                      BorderRadius.circular(
+                    28,
+                  ),
                   border: Border.all(
-                    color: colors.outlineVariant.withValues(
+                    color: colors
+                        .outlineVariant
+                        .withValues(
                       alpha: 0.5,
                     ),
                   ),
                   boxShadow: [
                     BoxShadow(
                       blurRadius: 20,
-                      offset: const Offset(0, 8),
-                      color: Colors.black.withValues(
+                      offset:
+                          const Offset(0, 8),
+                      color: Colors.black
+                          .withValues(
                         alpha: 0.06,
                       ),
                     ),
@@ -425,43 +552,71 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                     RepaintBoundary(
                       key: _qrKey,
                       child: Container(
-                        padding: const EdgeInsets.all(22),
-                        decoration: BoxDecoration(
+                        padding:
+                            const EdgeInsets.all(
+                          22,
+                        ),
+                        decoration:
+                            BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
+                          borderRadius:
+                              BorderRadius.circular(
+                            24,
+                          ),
                         ),
                         child: QrImageView(
                           data: widget.value,
                           size: 270,
-                          backgroundColor: Colors.white,
+                          backgroundColor:
+                              Colors.white,
                           errorCorrectionLevel:
                               QrErrorCorrectLevel.H,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+
+                    const SizedBox(
+                      height: 24,
+                    ),
+
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(16),
+                      padding:
+                          const EdgeInsets.all(
+                        14,
+                      ),
+                      decoration:
+                          BoxDecoration(
+                        color: colors
+                            .surfaceContainerHighest,
+                        borderRadius:
+                            BorderRadius.circular(
+                          16,
+                        ),
                       ),
                       child: Text(
                         widget.value,
-                        textAlign: TextAlign.center,
+                        textAlign:
+                            TextAlign.center,
                         maxLines: 5,
-                        overflow: TextOverflow.ellipsis,
+                        overflow:
+                            TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: colors.onSurface,
+                          color:
+                              colors.onSurface,
                           fontSize: 14,
                           height: 1.4,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 10),
+
+                    const SizedBox(
+                      height: 10,
+                    ),
+
                     TextButton.icon(
-                      onPressed: _copyValue,
+                      onPressed:
+                          _copyValue,
                       icon: const Icon(
                         Icons.copy_rounded,
                       ),
@@ -472,18 +627,26 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
 
-              // FAVORITE BUTTON
+              // =================================================
+              // FAVORITE
+              // =================================================
+
               SizedBox(
                 width: double.infinity,
                 height: 52,
-                child: OutlinedButton.icon(
-                  onPressed: _toggleFavorite,
+                child:
+                    OutlinedButton.icon(
+                  onPressed:
+                      _toggleFavorite,
                   icon: Icon(
                     favorite
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
+                        ? Icons
+                            .favorite_rounded
+                        : Icons
+                            .favorite_border_rounded,
                     color: favorite
                         ? Colors.redAccent
                         : null,
@@ -496,16 +659,24 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(
+                height: 12,
+              ),
+
+              // =================================================
+              // SAVE + SHARE
+              // =================================================
 
               Row(
                 children: [
                   Expanded(
                     child: SizedBox(
                       height: 54,
-                      child: OutlinedButton.icon(
+                      child:
+                          OutlinedButton.icon(
                         onPressed:
-                            _isSaving || _isSharing
+                            _isSaving ||
+                                    _isSharing
                                 ? null
                                 : _saveQR,
                         icon: _isSaving
@@ -514,11 +685,13 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                                 height: 18,
                                 child:
                                     CircularProgressIndicator(
-                                  strokeWidth: 2,
+                                  strokeWidth:
+                                      2,
                                 ),
                               )
                             : const Icon(
-                                Icons.download_rounded,
+                                Icons
+                                    .download_rounded,
                               ),
                         label: Text(
                           _isSaving
@@ -528,13 +701,19 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+
+                  const SizedBox(
+                    width: 10,
+                  ),
+
                   Expanded(
                     child: SizedBox(
                       height: 54,
-                      child: FilledButton.icon(
+                      child:
+                          FilledButton.icon(
                         onPressed:
-                            _isSaving || _isSharing
+                            _isSaving ||
+                                    _isSharing
                                 ? null
                                 : _showShareSheet,
                         icon: _isSharing
@@ -543,12 +722,15 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                                 height: 18,
                                 child:
                                     CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                                  strokeWidth:
+                                      2,
+                                  color:
+                                      Colors.white,
                                 ),
                               )
                             : const Icon(
-                                Icons.share_rounded,
+                                Icons
+                                    .share_rounded,
                               ),
                         label: Text(
                           _isSharing
@@ -560,12 +742,18 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+
+              const SizedBox(
+                height: 12,
+              ),
+
               Text(
                 'Share your QR Code with your favorite apps',
-                textAlign: TextAlign.center,
+                textAlign:
+                    TextAlign.center,
                 style: TextStyle(
-                  color: colors.onSurfaceVariant,
+                  color:
+                      colors.onSurfaceVariant,
                   fontSize: 12,
                 ),
               ),
@@ -576,3 +764,4 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     );
   }
 }
+

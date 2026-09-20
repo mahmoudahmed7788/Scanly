@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart' as pdf;
 import 'package:pdf/widgets.dart' as pw;
+
+import 'package:scanly/DocumentModel.dart';
 import 'package:scanly/ScanlyActivityService.dart';
 import 'package:scanly/Scanly_Items.dart';
 
@@ -16,16 +18,21 @@ class PDFImagesPage extends StatefulWidget {
   const PDFImagesPage({super.key});
 
   @override
-  State<PDFImagesPage> createState() => _PDFImagesPageState();
+  State<PDFImagesPage> createState() =>
+      _PDFImagesPageState();
 }
 
-class _PDFImagesPageState extends State<PDFImagesPage> {
-  final ImagePicker _picker = ImagePicker();
+class _PDFImagesPageState
+    extends State<PDFImagesPage> {
+  final ImagePicker _picker =
+      ImagePicker();
 
   final List<XFile> _selectedImages = [];
 
   final TextEditingController _nameController =
-      TextEditingController(text: 'Scanly Document');
+      TextEditingController(
+    text: 'Scanly Document',
+  );
 
   bool _isCreating = false;
 
@@ -34,6 +41,7 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
   @override
   void initState() {
     super.initState();
+
     _loadScanlyLogo();
   }
 
@@ -48,10 +56,13 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
       }
 
       setState(() {
-        _scanlyLogoBytes = data.buffer.asUint8List();
+        _scanlyLogoBytes =
+            data.buffer.asUint8List();
       });
     } catch (e) {
-      debugPrint('LOAD SCANLY LOGO ERROR: $e');
+      debugPrint(
+        'LOAD SCANLY LOGO ERROR: $e',
+      );
     }
   }
 
@@ -61,9 +72,14 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     super.dispose();
   }
 
+  // ============================================================
+  // PICK IMAGES
+  // ============================================================
+
   Future<void> _pickImages() async {
     try {
-      final images = await _picker.pickMultiImage();
+      final images =
+          await _picker.pickMultiImage();
 
       if (images.isEmpty) {
         return;
@@ -74,10 +90,14 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
       }
 
       setState(() {
-        _selectedImages.addAll(images);
+        _selectedImages.addAll(
+          images,
+        );
       });
     } catch (e) {
-      debugPrint('PICK IMAGES ERROR: $e');
+      debugPrint(
+        'PICK IMAGES ERROR: $e',
+      );
 
       if (!mounted) {
         return;
@@ -90,8 +110,13 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     }
   }
 
+  // ============================================================
+  // REMOVE IMAGE
+  // ============================================================
+
   void _removeImage(int index) {
-    if (index < 0 || index >= _selectedImages.length) {
+    if (index < 0 ||
+        index >= _selectedImages.length) {
       return;
     }
 
@@ -100,7 +125,14 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     });
   }
 
-  void _moveImage(int oldIndex, int newIndex) {
+  // ============================================================
+  // MOVE IMAGE
+  // ============================================================
+
+  void _moveImage(
+    int oldIndex,
+    int newIndex,
+  ) {
     if (oldIndex < 0 ||
         oldIndex >= _selectedImages.length ||
         newIndex < 0 ||
@@ -113,12 +145,25 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
         newIndex--;
       }
 
-      final image = _selectedImages.removeAt(oldIndex);
-      _selectedImages.insert(newIndex, image);
+      final image =
+          _selectedImages.removeAt(
+        oldIndex,
+      );
+
+      _selectedImages.insert(
+        newIndex,
+        image,
+      );
     });
   }
 
-  String _cleanFileName(String value) {
+  // ============================================================
+  // CLEAN FILE NAME
+  // ============================================================
+
+  String _cleanFileName(
+    String value,
+  ) {
     var name = value.trim();
 
     if (name.isEmpty) {
@@ -130,8 +175,13 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
       '_',
     );
 
-    if (name.toLowerCase().endsWith('.pdf')) {
-      name = name.substring(0, name.length - 4);
+    if (name
+        .toLowerCase()
+        .endsWith('.pdf')) {
+      name = name.substring(
+        0,
+        name.length - 4,
+      );
     }
 
     if (name.trim().isEmpty) {
@@ -141,26 +191,40 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     return name.trim();
   }
 
-  Future<Uint8List?> _prepareImage(String path) async {
+  // ============================================================
+  // PREPARE IMAGE
+  // ============================================================
+
+  Future<Uint8List?> _prepareImage(
+    String path,
+  ) async {
     try {
       final file = File(path);
 
       if (!await file.exists()) {
-        debugPrint('IMAGE FILE DOES NOT EXIST: $path');
+        debugPrint(
+          'IMAGE FILE DOES NOT EXIST: $path',
+        );
         return null;
       }
 
-      final bytes = await file.readAsBytes();
+      final bytes =
+          await file.readAsBytes();
 
       if (bytes.isEmpty) {
-        debugPrint('IMAGE FILE IS EMPTY: $path');
+        debugPrint(
+          'IMAGE FILE IS EMPTY: $path',
+        );
         return null;
       }
 
-      final decoded = img.decodeImage(bytes);
+      final decoded =
+          img.decodeImage(bytes);
 
       if (decoded == null) {
-        return Uint8List.fromList(bytes);
+        return Uint8List.fromList(
+          bytes,
+        );
       }
 
       img.Image image = decoded;
@@ -177,14 +241,24 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
         quality: 75,
       );
 
-      return Uint8List.fromList(jpg);
+      return Uint8List.fromList(
+        jpg,
+      );
     } catch (e) {
-      debugPrint('PREPARE IMAGE ERROR: $e');
+      debugPrint(
+        'PREPARE IMAGE ERROR: $e',
+      );
+
       return null;
     }
   }
 
-  pdf.PdfPageFormat _pageFormatForImage(
+  // ============================================================
+  // PAGE FORMAT
+  // ============================================================
+
+  pdf.PdfPageFormat
+      _pageFormatForImage(
     int width,
     int height,
   ) {
@@ -201,6 +275,10 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     );
   }
 
+  // ============================================================
+  // ACTIVITY ITEM
+  // ============================================================
+
   String _itemId(String path) {
     return 'pdf_${path.hashCode}';
   }
@@ -216,32 +294,46 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
       type: 'pdf',
       route: '/pdf-preview',
       data: path,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
+      createdAt:
+          DateTime.now()
+              .millisecondsSinceEpoch,
     );
   }
 
+  // ============================================================
+  // SCANLY BRANDING
+  // ============================================================
+
   pw.Widget _buildScanlyBranding() {
-    final logo = _scanlyLogoBytes == null
-        ? null
-        : pw.MemoryImage(_scanlyLogoBytes!);
+    final logo =
+        _scanlyLogoBytes == null
+            ? null
+            : pw.MemoryImage(
+                _scanlyLogoBytes!,
+              );
 
     return pw.Container(
       height: 42,
-      padding: const pw.EdgeInsets.only(
+      padding:
+          const pw.EdgeInsets.only(
         top: 6,
         bottom: 4,
       ),
-      decoration: pw.BoxDecoration(
+      decoration:
+          pw.BoxDecoration(
         border: pw.Border(
           top: pw.BorderSide(
-            color: pdf.PdfColors.grey400,
+            color:
+                pdf.PdfColors.grey400,
             width: 0.6,
           ),
         ),
       ),
       child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.center,
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        mainAxisAlignment:
+            pw.MainAxisAlignment.center,
+        crossAxisAlignment:
+            pw.CrossAxisAlignment.center,
         children: [
           if (logo != null)
             pw.Container(
@@ -249,40 +341,59 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
               height: 28,
               child: pw.Image(
                 logo,
-                fit: pw.BoxFit.contain,
+                fit:
+                    pw.BoxFit.contain,
               ),
             )
           else
             pw.Container(
               width: 28,
               height: 28,
-              alignment: pw.Alignment.center,
-              decoration: pw.BoxDecoration(
-                color: pdf.PdfColors.indigo,
-                borderRadius: pw.BorderRadius.circular(7),
+              alignment:
+                  pw.Alignment.center,
+              decoration:
+                  pw.BoxDecoration(
+                color:
+                    pdf.PdfColors.indigo,
+                borderRadius:
+                    pw.BorderRadius.circular(
+                  7,
+                ),
               ),
               child: pw.Text(
                 'S',
-                style: pw.TextStyle(
-                  color: pdf.PdfColors.white,
+                style:
+                    pw.TextStyle(
+                  color:
+                      pdf.PdfColors.white,
                   fontSize: 15,
-                  fontWeight: pw.FontWeight.bold,
+                  fontWeight:
+                      pw.FontWeight.bold,
                 ),
               ),
             ),
-          pw.SizedBox(width: 8),
+          pw.SizedBox(
+            width: 8,
+          ),
           pw.Text(
             'Scanly',
-            style: pw.TextStyle(
-              color: pdf.PdfColors.indigo,
+            style:
+                pw.TextStyle(
+              color:
+                  pdf.PdfColors.indigo,
               fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
+              fontWeight:
+                  pw.FontWeight.bold,
             ),
           ),
         ],
       ),
     );
   }
+
+  // ============================================================
+  // CREATE PDF
+  // ============================================================
 
   Future<void> _createPdf() async {
     if (_isCreating) {
@@ -304,18 +415,23 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     });
 
     try {
-      debugPrint('========== CREATE PDF START =========');
+      debugPrint(
+        '========== CREATE PDF START =========',
+      );
 
-      final documentName = _cleanFileName(
+      final documentName =
+          _cleanFileName(
         _nameController.text,
       );
 
-      final document = pw.Document();
+      final pdfDocument =
+          pw.Document();
 
       final appDirectory =
           await getApplicationDocumentsDirectory();
 
-      final documentsDirectory = Directory(
+      final documentsDirectory =
+          Directory(
         '${appDirectory.path}/Scanly/Documents',
       );
 
@@ -324,9 +440,12 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
       );
 
       final timestamp =
-          DateTime.now().millisecondsSinceEpoch;
+          DateTime.now()
+              .millisecondsSinceEpoch;
 
-      final pagesDirectory = Directory(
+      // Folder containing the actual page images.
+      final pagesDirectory =
+          Directory(
         '${documentsDirectory.path}/'
         '${documentName}_pages_$timestamp',
       );
@@ -335,24 +454,38 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
         recursive: true,
       );
 
-      final savedPageImagePaths = <String>[];
+      // ========================================================
+      // THIS LIST IS THE IMPORTANT PART
+      // These paths will be stored inside DocumentModel.
+      // ========================================================
+
+      final savedPageImagePaths =
+          <String>[];
 
       debugPrint(
-        'IMAGES COUNT: ${_selectedImages.length}',
+        'IMAGES COUNT: '
+        '${_selectedImages.length}',
       );
+
+      // ========================================================
+      // PROCESS EACH IMAGE
+      // ========================================================
 
       for (
         int i = 0;
         i < _selectedImages.length;
         i++
       ) {
-        final selected = _selectedImages[i];
+        final selected =
+            _selectedImages[i];
 
         debugPrint(
-          'PROCESSING IMAGE ${i + 1}: ${selected.path}',
+          'PROCESSING IMAGE ${i + 1}: '
+          '${selected.path}',
         );
 
-        final imageBytes = await _prepareImage(
+        final imageBytes =
+            await _prepareImage(
           selected.path,
         );
 
@@ -363,7 +496,8 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
           continue;
         }
 
-        final decoded = img.decodeImage(
+        final decoded =
+            img.decodeImage(
           imageBytes,
         );
 
@@ -374,50 +508,85 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
           continue;
         }
 
+        // ------------------------------------------------------
+        // SAVE PAGE IMAGE
+        // ------------------------------------------------------
+
         final pagePath =
             '${pagesDirectory.path}/'
-            'page_${(i + 1).toString().padLeft(3, '0')}.jpg';
+            'page_'
+            '${(i + 1).toString().padLeft(3, '0')}'
+            '.jpg';
 
-        final pageFile = File(pagePath);
+        final pageFile =
+            File(pagePath);
 
         await pageFile.writeAsBytes(
           imageBytes,
-          flush: true,
+          flush: false,
         );
 
-        savedPageImagePaths.add(pagePath);
+        // ------------------------------------------------------
+        // SAVE PATH FOR EDITING
+        // ------------------------------------------------------
 
-        final pdfImage = pw.MemoryImage(
+        savedPageImagePaths.add(
+          pagePath,
+        );
+
+        debugPrint(
+          'PAGE IMAGE SAVED: $pagePath',
+        );
+
+        // ------------------------------------------------------
+        // ADD IMAGE TO PDF
+        // ------------------------------------------------------
+
+        final pdfImage =
+            pw.MemoryImage(
           imageBytes,
         );
 
-        final pageFormat = _pageFormatForImage(
+        final pageFormat =
+            _pageFormatForImage(
           decoded.width,
           decoded.height,
         );
 
-        const brandingHeight = 42.0;
+        const brandingHeight =
+            42.0;
 
         final imageAreaHeight =
-            pageFormat.height - brandingHeight;
+            pageFormat.height -
+                brandingHeight;
 
-        document.addPage(
+        pdfDocument.addPage(
           pw.Page(
-            pageFormat: pageFormat,
-            margin: pw.EdgeInsets.zero,
+            pageFormat:
+                pageFormat,
+            margin:
+                pw.EdgeInsets.zero,
             build: (context) {
               return pw.Column(
                 children: [
                   pw.SizedBox(
-                    height: imageAreaHeight,
-                    width: double.infinity,
-                    child: pw.Center(
-                      child: pw.Padding(
+                    height:
+                        imageAreaHeight,
+                    width:
+                        double.infinity,
+                    child:
+                        pw.Center(
+                      child:
+                          pw.Padding(
                         padding:
-                            const pw.EdgeInsets.all(8),
-                        child: pw.Image(
+                            const pw.EdgeInsets.all(
+                          8,
+                        ),
+                        child:
+                            pw.Image(
                           pdfImage,
-                          fit: pw.BoxFit.contain,
+                          fit:
+                              pw.BoxFit.contain,
                         ),
                       ),
                     ),
@@ -434,26 +603,49 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
         );
       }
 
+      // ========================================================
+      // VALIDATE
+      // ========================================================
+
       if (savedPageImagePaths.isEmpty) {
         throw Exception(
           'No valid images were processed',
         );
       }
 
-      debugPrint('SAVING PDF...');
-
-      final pdfBytes = await document.save();
-
       debugPrint(
-        'PDF SAVED: ${pdfBytes.length} bytes',
+        'VALID PAGE IMAGES: '
+        '${savedPageImagePaths.length}',
       );
 
-      var fileName = '$documentName.pdf';
+      // ========================================================
+      // CREATE PDF
+      // ========================================================
+
+      debugPrint(
+        'SAVING PDF...',
+      );
+
+      final pdfBytes =
+          await pdfDocument.save();
+
+      debugPrint(
+        'PDF SAVED: '
+        '${pdfBytes.length} bytes',
+      );
+
+      // ========================================================
+      // CREATE PDF FILE
+      // ========================================================
+
+      var fileName =
+          '$documentName.pdf';
 
       var pdfPath =
           '${documentsDirectory.path}/$fileName';
 
-      var pdfFile = File(pdfPath);
+      var pdfFile =
+          File(pdfPath);
 
       int counter = 1;
 
@@ -464,12 +656,15 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
         pdfPath =
             '${documentsDirectory.path}/$fileName';
 
-        pdfFile = File(pdfPath);
+        pdfFile =
+            File(pdfPath);
 
         counter++;
       }
 
-      debugPrint('WRITING PDF FILE...');
+      debugPrint(
+        'WRITING PDF FILE...',
+      );
 
       await pdfFile.writeAsBytes(
         pdfBytes,
@@ -477,37 +672,132 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
       );
 
       debugPrint(
-        'PDF FILE WRITTEN: ${pdfFile.path}',
+        'PDF FILE WRITTEN: '
+        '${pdfFile.path}',
       );
 
-      final item = _createItem(
+      // ========================================================
+      // CREATE DOCUMENT MODEL
+      // ========================================================
+
+      final documentId =
+          pdfFile.path.hashCode
+              .toString();
+
+      final scanlyDocument =
+          DocumentModel(
+        id: documentId,
+        title: documentName,
+        date:
+            DateTime.now()
+                .toIso8601String(),
+        type: 'pdf',
+        filePath:
+            pdfFile.path,
+        isFavorite: false,
+
+        // ======================================================
+        // THIS IS THE FIX
+        // ======================================================
+
+        imagePaths:
+            List<String>.from(
+          savedPageImagePaths,
+        ),
+      );
+
+      debugPrint(
+        'DOCUMENT CREATED',
+      );
+
+      debugPrint(
+        'DOCUMENT ID: '
+        '${scanlyDocument.id}',
+      );
+
+      debugPrint(
+        'DOCUMENT IMAGES: '
+        '${scanlyDocument.imagePaths.length}',
+      );
+
+      for (final imagePath
+          in scanlyDocument.imagePaths) {
+        debugPrint(
+          'EDIT IMAGE PATH: $imagePath',
+        );
+      }
+
+      // ========================================================
+      // SAVE DOCUMENT
+      // ========================================================
+
+      await DocumentStorage.saveDocument(
+        scanlyDocument,
+      );
+
+      debugPrint(
+        'DOCUMENT SAVED: '
+        '${scanlyDocument.id}',
+      );
+
+      // ========================================================
+      // RECENT
+      // ========================================================
+
+      final item =
+          _createItem(
         pdfFile.path,
         fileName,
       );
 
-      await ScanlyActivityService.addRecent(item);
+      await ScanlyActivityService
+          .addRecent(
+        item,
+      );
 
       if (!mounted) {
         return;
       }
 
-      debugPrint('OPENING PREVIEW...');
+      // ========================================================
+      // OPEN PREVIEW
+      // ========================================================
 
-      context.push(
-        '/pdf-preview',
-        extra: {
-          'pdfBytes': Uint8List.fromList(pdfBytes),
-          'fileName': fileName,
-          'filePath': pdfFile.path,
-          'imagePaths': savedPageImagePaths,
-        },
+      debugPrint(
+        'OPENING PREVIEW...',
       );
+
+      await context.push(
+        '/pdf-preview',
+        extra: scanlyDocument,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      // ========================================================
+      // CLEAR
+      // ========================================================
+
+      setState(() {
+        _selectedImages.clear();
+
+        _nameController.text =
+            'Scanly Document';
+      });
     } catch (e, stackTrace) {
       debugPrint(
         '========== CREATE PDF ERROR =========',
       );
-      debugPrint('$e');
-      debugPrint(stackTrace.toString());
+
+      debugPrint(
+        '$e',
+      );
+
+      debugPrint(
+        stackTrace.toString(),
+      );
 
       if (!mounted) {
         return;
@@ -530,6 +820,10 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     }
   }
 
+  // ============================================================
+  // MESSAGE
+  // ============================================================
+
   void _showMessage(
     String message,
     IconData icon,
@@ -539,18 +833,23 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     }
 
     final colors =
-        Theme.of(context).colorScheme;
+        Theme.of(context)
+            .colorScheme;
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          behavior: SnackBarBehavior.floating,
+          behavior:
+              SnackBarBehavior.floating,
           backgroundColor:
               colors.inverseSurface,
-          shape: RoundedRectangleBorder(
+          shape:
+              RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(16),
+                BorderRadius.circular(
+              16,
+            ),
           ),
           content: Row(
             children: [
@@ -559,11 +858,14 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
                 color:
                     colors.onInverseSurface,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(
+                width: 10,
+              ),
               Expanded(
                 child: Text(
                   message,
-                  style: TextStyle(
+                  style:
+                      TextStyle(
                     color:
                         colors.onInverseSurface,
                     fontWeight:
@@ -577,56 +879,82 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
       );
   }
 
+  // ============================================================
+  // TOP SECTION
+  // ============================================================
+
   Widget _buildTopSection(
     ColorScheme colors,
   ) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
+      padding:
+          const EdgeInsets.fromLTRB(
         16,
         12,
         16,
         12,
       ),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: colors.onSurface.withValues(
+      decoration:
+          BoxDecoration(
+        color:
+            colors.surface,
+        border:
+            Border(
+          bottom:
+              BorderSide(
+            color:
+                colors.onSurface.withValues(
               alpha: 0.08,
             ),
           ),
         ),
       ),
-      child: Column(
+      child:
+          Column(
         children: [
           TextField(
-            controller: _nameController,
+            controller:
+                _nameController,
             textInputAction:
                 TextInputAction.done,
-            decoration: InputDecoration(
-              labelText: 'PDF File Name',
-              hintText: 'Enter PDF name',
-              prefixIcon: const Icon(
+            decoration:
+                InputDecoration(
+              labelText:
+                  'PDF File Name',
+              hintText:
+                  'Enter PDF name',
+              prefixIcon:
+                  const Icon(
                 Icons
                     .drive_file_rename_outline_rounded,
               ),
-              suffixText: '.pdf',
-              filled: true,
+              suffixText:
+                  '.pdf',
+              filled:
+                  true,
               fillColor:
                   colors.surfaceContainerHighest,
-              border: OutlineInputBorder(
+              border:
+                  OutlineInputBorder(
                 borderRadius:
-                    BorderRadius.circular(16),
+                    BorderRadius.circular(
+                  16,
+                ),
                 borderSide:
                     BorderSide.none,
               ),
             ),
           ),
-          const SizedBox(height: 10),
+
+          const SizedBox(
+            height: 10,
+          ),
+
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child:
+                    OutlinedButton.icon(
                   onPressed:
                       _isCreating
                           ? null
@@ -646,25 +974,34 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
                       ),
                     ),
                   ),
-                  icon: const Icon(
+                  icon:
+                      const Icon(
                     Icons
                         .add_photo_alternate_rounded,
                   ),
-                  label: const Text(
+                  label:
+                      const Text(
                     'Add Images',
-                    style: TextStyle(
+                    style:
+                        TextStyle(
                       fontWeight:
                           FontWeight.w700,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+
+              const SizedBox(
+                width: 10,
+              ),
+
               Expanded(
-                child: FilledButton.icon(
+                child:
+                    FilledButton.icon(
                   onPressed:
                       _isCreating ||
-                              _selectedImages.isEmpty
+                              _selectedImages
+                                  .isEmpty
                           ? null
                           : _createPdf,
                   style:
@@ -682,22 +1019,27 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
                       ),
                     ),
                   ),
-                  icon: _isCreating
-                      ? const SizedBox(
-                          width: 19,
-                          height: 19,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color:
-                                Colors.white,
-                          ),
-                        )
-                      : const Icon(
-                          Icons
-                              .picture_as_pdf_rounded,
-                        ),
-                  label: Text(
+                  icon:
+                      _isCreating
+                          ? const SizedBox(
+                              width:
+                                  19,
+                              height:
+                                  19,
+                              child:
+                                  CircularProgressIndicator(
+                                strokeWidth:
+                                    2,
+                                color:
+                                    Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons
+                                  .picture_as_pdf_rounded,
+                            ),
+                  label:
+                      Text(
                     _isCreating
                         ? 'Creating...'
                         : 'Create PDF',
@@ -716,68 +1058,100 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     );
   }
 
+  // ============================================================
+  // EMPTY
+  // ============================================================
+
   Widget _buildEmptyPreview(
     ColorScheme colors,
   ) {
     return Center(
-      child: Padding(
+      child:
+          Padding(
         padding:
-            const EdgeInsets.all(24),
-        child: Column(
+            const EdgeInsets.all(
+          24,
+        ),
+        child:
+            Column(
           mainAxisAlignment:
               MainAxisAlignment.center,
           children: [
             Container(
               width: 110,
               height: 110,
-              decoration: BoxDecoration(
+              decoration:
+                  BoxDecoration(
                 color:
                     colors.primary.withValues(
-                  alpha: 0.10,
+                  alpha:
+                      0.10,
                 ),
-                shape: BoxShape.circle,
+                shape:
+                    BoxShape.circle,
               ),
-              child: Icon(
+              child:
+                  Icon(
                 Icons
                     .photo_library_outlined,
-                size: 54,
+                size:
+                    54,
                 color:
                     colors.primary,
               ),
             ),
-            const SizedBox(height: 20),
+
+            const SizedBox(
+              height: 20,
+            ),
+
             Text(
               'No Images Added',
-              style: TextStyle(
-                fontSize: 21,
+              style:
+                  TextStyle(
+                fontSize:
+                    21,
                 fontWeight:
                     FontWeight.w800,
                 color:
                     colors.onSurface,
               ),
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(
+              height: 8,
+            ),
+
             Text(
               'Add images and they will appear here as PDF pages.',
               textAlign:
                   TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
+              style:
+                  TextStyle(
+                fontSize:
+                    14,
                 color:
-                    colors.onSurface
-                        .withValues(
-                  alpha: 0.60,
+                    colors.onSurface.withValues(
+                  alpha:
+                      0.60,
                 ),
               ),
             ),
-            const SizedBox(height: 22),
+
+            const SizedBox(
+              height: 22,
+            ),
+
             FilledButton.icon(
-              onPressed: _pickImages,
-              icon: const Icon(
+              onPressed:
+                  _pickImages,
+              icon:
+                  const Icon(
                 Icons
                     .add_photo_alternate_rounded,
               ),
-              label: const Text(
+              label:
+                  const Text(
                 'Add Images',
               ),
             ),
@@ -787,6 +1161,10 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     );
   }
 
+  // ============================================================
+  // IMAGE CARD
+  // ============================================================
+
   Widget _buildImageCard(
     ColorScheme colors,
     int index,
@@ -794,39 +1172,51 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     final image =
         _selectedImages[index];
 
-    final file = File(image.path);
+    final file =
+        File(image.path);
 
     return Container(
       margin:
           const EdgeInsets.only(
         bottom: 16,
       ),
-      decoration: BoxDecoration(
+      decoration:
+          BoxDecoration(
         color:
             colors.surfaceContainerHighest,
         borderRadius:
-            BorderRadius.circular(20),
-        border: Border.all(
+            BorderRadius.circular(
+          20,
+        ),
+        border:
+            Border.all(
           color:
               colors.onSurface.withValues(
-            alpha: 0.08,
+            alpha:
+                0.08,
           ),
         ),
         boxShadow: [
           BoxShadow(
             color:
                 Colors.black.withValues(
-              alpha: 0.05,
+              alpha:
+                  0.05,
             ),
-            blurRadius: 12,
+            blurRadius:
+                12,
             offset:
-                const Offset(0, 4),
+                const Offset(
+              0,
+              4,
+            ),
           ),
         ],
       ),
       clipBehavior:
           Clip.antiAlias,
-      child: Column(
+      child:
+          Column(
         children: [
           Stack(
             children: [
@@ -835,8 +1225,10 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
                     double.infinity,
                 constraints:
                     const BoxConstraints(
-                  minHeight: 220,
-                  maxHeight: 500,
+                  minHeight:
+                      220,
+                  maxHeight:
+                      500,
                 ),
                 color:
                     colors.surface,
@@ -863,71 +1255,90 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
                             colors,
                           ),
               ),
+
               Positioned(
-                top: 12,
-                left: 12,
-                child: Container(
+                top:
+                    12,
+                left:
+                    12,
+                child:
+                    Container(
                   padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
+                      const EdgeInsets
+                          .symmetric(
+                    horizontal:
+                        12,
+                    vertical:
+                        7,
                   ),
                   decoration:
                       BoxDecoration(
                     color:
                         Colors.black.withValues(
-                      alpha: 0.70,
+                      alpha:
+                          0.70,
                     ),
                     borderRadius:
                         BorderRadius.circular(
                       20,
                     ),
                   ),
-                  child: Text(
+                  child:
+                      Text(
                     'Page ${index + 1}',
                     style:
                         const TextStyle(
                       color:
                           Colors.white,
-                      fontSize: 12,
+                      fontSize:
+                          12,
                       fontWeight:
                           FontWeight.w800,
                     ),
                   ),
                 ),
               ),
+
               Positioned(
-                top: 10,
-                right: 10,
-                child: Material(
+                top:
+                    10,
+                right:
+                    10,
+                child:
+                    Material(
                   color:
                       Colors.black.withValues(
-                    alpha: 0.70,
+                    alpha:
+                        0.70,
                   ),
                   shape:
                       const CircleBorder(),
-                  child: InkWell(
+                  child:
+                      InkWell(
                     customBorder:
                         const CircleBorder(),
-                    onTap: _isCreating
-                        ? null
-                        : () {
-                            _removeImage(
-                              index,
-                            );
-                          },
+                    onTap:
+                        _isCreating
+                            ? null
+                            : () {
+                                _removeImage(
+                                  index,
+                                );
+                              },
                     child:
                         const Padding(
                       padding:
                           EdgeInsets.all(
                         9,
                       ),
-                      child: Icon(
+                      child:
+                          Icon(
                         Icons
                             .close_rounded,
                         color:
                             Colors.white,
-                        size: 21,
+                        size:
+                            21,
                       ),
                     ),
                   ),
@@ -935,6 +1346,7 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
               ),
             ],
           ),
+
           Padding(
             padding:
                 const EdgeInsets.fromLTRB(
@@ -943,17 +1355,21 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
               10,
               11,
             ),
-            child: Row(
+            child:
+                Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child:
+                      Text(
                     image.name,
-                    maxLines: 1,
+                    maxLines:
+                        1,
                     overflow:
                         TextOverflow.ellipsis,
                     style:
                         TextStyle(
-                      fontSize: 13,
+                      fontSize:
+                          13,
                       fontWeight:
                           FontWeight.w600,
                       color:
@@ -961,36 +1377,43 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
                     ),
                   ),
                 ),
+
                 const SizedBox(
-                  width: 8,
+                  width:
+                      8,
                 ),
+
                 ReorderableDelayedDragStartListener(
-                  index: index,
+                  index:
+                      index,
                   enabled:
                       !_isCreating,
-                  child: Container(
+                  child:
+                      Container(
                     padding:
                         const EdgeInsets.all(
                       8,
                     ),
                     decoration:
                         BoxDecoration(
-                      color: colors
-                          .primary
-                          .withValues(
-                        alpha: 0.10,
+                      color:
+                          colors.primary.withValues(
+                        alpha:
+                            0.10,
                       ),
                       borderRadius:
                           BorderRadius.circular(
                         10,
                       ),
                     ),
-                    child: Icon(
+                    child:
+                        Icon(
                       Icons
                           .drag_indicator_rounded,
                       color:
                           colors.primary,
-                      size: 22,
+                      size:
+                          22,
                     ),
                   ),
                 ),
@@ -1002,23 +1425,33 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     );
   }
 
+  // ============================================================
+  // IMAGE ERROR
+  // ============================================================
+
   Widget _buildImageError(
     ColorScheme colors,
   ) {
     return SizedBox(
-      height: 260,
-      child: Column(
+      height:
+          260,
+      child:
+          Column(
         mainAxisAlignment:
             MainAxisAlignment.center,
         children: [
           Icon(
             Icons
                 .broken_image_outlined,
-            size: 52,
+            size:
+                52,
             color:
                 colors.error,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(
+            height:
+                10,
+          ),
           Text(
             'Unable to preview image',
             style:
@@ -1034,6 +1467,10 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(
     BuildContext context,
@@ -1045,28 +1482,32 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
     return Scaffold(
       backgroundColor:
           colors.surfaceContainerLowest,
-      appBar: AppBar(
-        title: const Text(
+      appBar:
+          AppBar(
+        title:
+            const Text(
           'Image to PDF',
-          style: TextStyle(
+          style:
+              TextStyle(
             fontWeight:
                 FontWeight.w800,
           ),
         ),
       ),
-      body: Column(
+      body:
+          Column(
         children: [
           _buildTopSection(
             colors,
           ),
+
           Expanded(
             child:
                 _selectedImages.isEmpty
                     ? _buildEmptyPreview(
                         colors,
                       )
-                    : ReorderableListView
-                        .builder(
+                    : ReorderableListView.builder(
                         padding:
                             const EdgeInsets
                                 .fromLTRB(
@@ -1088,7 +1529,8 @@ class _PDFImagesPageState extends State<PDFImagesPage> {
                           index,
                         ) {
                           return KeyedSubtree(
-                            key: ValueKey(
+                            key:
+                                ValueKey(
                               _selectedImages[
                                       index]
                                   .path,

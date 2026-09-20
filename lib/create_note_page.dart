@@ -9,11 +9,16 @@ import 'package:scanly/Note_Model.dart';
 class _PageEditorData {
   final String id;
   final QuillController controller;
+  final FocusNode focusNode;
+  final ScrollController scrollController;
+
   bool isLandscape;
 
   _PageEditorData({
     required this.id,
     required this.controller,
+    required this.focusNode,
+    required this.scrollController,
     this.isLandscape = false,
   });
 }
@@ -74,35 +79,22 @@ class _CreateNotePageState extends State<CreateNotePage> {
   int _colorValue = 0xFFFFF4E6;
   double _zoom = 1.0;
 
-  _PageEditorData get _currentPageData =>
-      _pages[_currentPage];
+  _PageEditorData get _currentPageData => _pages[_currentPage];
 
-  QuillController get _controller =>
-      _currentPageData.controller;
+  QuillController get _controller => _currentPageData.controller;
 
   @override
   void initState() {
     super.initState();
 
-    _titleController.text =
-        widget.note?.title ?? '';
+    _titleController.text = widget.note?.title ?? '';
+    _isPinned = widget.note?.isPinned ?? false;
+    _colorValue = widget.note?.colorValue ?? 0xFFFFF4E6;
 
-    _isPinned =
-        widget.note?.isPinned ?? false;
+    _imagePaths.addAll(widget.note?.imagePaths ?? []);
+    _pdfs.addAll(widget.note?.pdfs ?? []);
 
-    _colorValue =
-        widget.note?.colorValue ?? 0xFFFFF4E6;
-
-    _imagePaths.addAll(
-      widget.note?.imagePaths ?? [],
-    );
-
-    _pdfs.addAll(
-      widget.note?.pdfs ?? [],
-    );
-
-    if (widget.note != null &&
-        widget.note!.pages.isNotEmpty) {
+    if (widget.note != null && widget.note!.pages.isNotEmpty) {
       for (final page in widget.note!.pages) {
         _pages.add(
           _createPage(
@@ -115,11 +107,8 @@ class _CreateNotePageState extends State<CreateNotePage> {
     } else {
       _pages.add(
         _createPage(
-          id: DateTime.now()
-              .microsecondsSinceEpoch
-              .toString(),
-          quillData:
-              widget.note?.quillData ?? [],
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          quillData: widget.note?.quillData ?? [],
         ),
       );
     }
@@ -146,15 +135,19 @@ class _CreateNotePageState extends State<CreateNotePage> {
 
     final controller = QuillController(
       document: document,
-      selection:
-          const TextSelection.collapsed(
+      selection: const TextSelection.collapsed(
         offset: 0,
       ),
     );
 
+    final focusNode = FocusNode();
+    final scrollController = ScrollController();
+
     return _PageEditorData(
       id: id,
       controller: controller,
+      focusNode: focusNode,
+      scrollController: scrollController,
       isLandscape: isLandscape,
     );
   }
@@ -163,6 +156,8 @@ class _CreateNotePageState extends State<CreateNotePage> {
   void dispose() {
     for (final page in _pages) {
       page.controller.dispose();
+      page.focusNode.dispose();
+      page.scrollController.dispose();
     }
 
     _titleController.dispose();
@@ -172,9 +167,7 @@ class _CreateNotePageState extends State<CreateNotePage> {
 
   void _addPage() {
     final page = _createPage(
-      id: DateTime.now()
-          .microsecondsSinceEpoch
-          .toString(),
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
       quillData: [],
     );
 
@@ -182,22 +175,23 @@ class _CreateNotePageState extends State<CreateNotePage> {
       _pages.add(page);
       _currentPage = _pages.length - 1;
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _currentPageData.focusNode.requestFocus();
+      }
+    });
   }
 
   void _deletePage() {
     if (_pages.length <= 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor:
-              Theme.of(context)
-                  .colorScheme
-                  .surface,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           content: Text(
             'You cannot delete the only page.',
             style: TextStyle(
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
@@ -212,16 +206,25 @@ class _CreateNotePageState extends State<CreateNotePage> {
       _pages.removeAt(_currentPage);
 
       if (_currentPage >= _pages.length) {
-        _currentPage =
-            _pages.length - 1;
+        _currentPage = _pages.length - 1;
       }
     });
 
     page.controller.dispose();
+    page.focusNode.dispose();
+    page.scrollController.dispose();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _currentPageData.focusNode.requestFocus();
+      }
+    });
   }
 
   void _previousPage() {
     if (_currentPage <= 0) return;
+
+    _currentPageData.focusNode.unfocus();
 
     setState(() {
       _currentPage--;
@@ -229,10 +232,9 @@ class _CreateNotePageState extends State<CreateNotePage> {
   }
 
   void _nextPage() {
-    if (_currentPage >=
-        _pages.length - 1) {
-      return;
-    }
+    if (_currentPage >= _pages.length - 1) return;
+
+    _currentPageData.focusNode.unfocus();
 
     setState(() {
       _currentPage++;
@@ -247,29 +249,24 @@ class _CreateNotePageState extends State<CreateNotePage> {
   }
 
   Future<void> _pickImages() async {
-    final images =
-        await _imagePicker.pickMultiImage();
+    final images = await _imagePicker.pickMultiImage();
 
     if (images.isEmpty) return;
 
     setState(() {
       _imagePaths.addAll(
-        images.map(
-          (image) => image.path,
-        ),
+        images.map((image) => image.path),
       );
     });
   }
 
   Future<void> _pickPdf() async {
-    final result =
-        await FilePicker.platform.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
     );
 
-    if (result == null ||
-        result.files.isEmpty) {
+    if (result == null || result.files.isEmpty) {
       return;
     }
 
@@ -300,134 +297,206 @@ class _CreateNotePageState extends State<CreateNotePage> {
     });
   }
 
+  // ============================================================
+  // TEXT FORMATTING
+  // ============================================================
+
+  void _applyAttribute(Attribute attribute) {
+    final controller = _controller;
+
+    controller.formatSelection(attribute);
+
+    // Keep the editor focused after pressing toolbar buttons.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _currentPageData.focusNode.requestFocus();
+
+      setState(() {});
+    });
+  }
+
+  void _applyValueAttribute(
+    String key,
+    String value,
+  ) {
+    final controller = _controller;
+
+    controller.formatSelection(
+      Attribute.fromKeyValue(
+        key,
+        value,
+      ),
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _currentPageData.focusNode.requestFocus();
+
+      setState(() {});
+    });
+  }
+
+  void _applyFont(String font) {
+    _controller.formatSelection(
+      Attribute.fromKeyValue(
+        Attribute.font.key,
+        font,
+      ),
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _currentPageData.focusNode.requestFocus();
+
+      setState(() {});
+    });
+  }
+
+  void _applyFontSize(String size) {
+    _controller.formatSelection(
+      Attribute.fromKeyValue(
+        Attribute.size.key,
+        size,
+      ),
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _currentPageData.focusNode.requestFocus();
+
+      setState(() {});
+    });
+  }
+
+  bool _hasAttribute(String key) {
+    final attributes =
+        _controller.getSelectionStyle().attributes;
+
+    if (attributes.containsKey(key)) {
+      return true;
+    }
+
+    try {
+      final toggled =
+          _controller.toggledStyle.attributes;
+
+      return toggled.containsKey(key);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _getCurrentFont() {
+    final attributes =
+        _controller.getSelectionStyle().attributes;
+
+    return attributes[Attribute.font.key]
+            ?.value
+            ?.toString() ??
+        'Poppins';
+  }
+
+  String _getCurrentFontSize() {
+    final attributes =
+        _controller.getSelectionStyle().attributes;
+
+    return attributes[Attribute.size.key]
+            ?.value
+            ?.toString() ??
+        '16';
+  }
+
+  // ============================================================
+  // NOTE COLOR
+  // ============================================================
+
   void _showColorPicker() {
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor:
-          theme.colorScheme.surface,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(28),
         ),
       ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding:
-                const EdgeInsets.fromLTRB(
+            padding: const EdgeInsets.fromLTRB(
               24,
               18,
               24,
               30,
             ),
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
                   child: Container(
                     width: 42,
                     height: 4,
-                    decoration:
-                        BoxDecoration(
-                      color: theme
-                          .dividerColor,
-                      borderRadius:
-                          BorderRadius
-                              .circular(10),
+                    decoration: BoxDecoration(
+                      color: theme.dividerColor,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
                 Text(
                   'Note Color',
-                  style: theme
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(
-                    fontWeight:
-                        FontWeight.bold,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 20),
                 Wrap(
                   spacing: 14,
                   runSpacing: 14,
-                  children:
-                      _noteColors.map(
-                    (color) {
-                      final selected =
-                          color.value ==
-                              _colorValue;
+                  children: _noteColors.map((color) {
+                    final selected =
+                        color.value == _colorValue;
 
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _colorValue =
-                                color.value;
-                          });
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _colorValue = color.value;
+                        });
 
-                          Navigator.pop(
-                            context,
-                          );
-                        },
-                        child: AnimatedContainer(
-                          duration:
-                              const Duration(
-                            milliseconds: 180,
-                          ),
-                          width: 50,
-                          height: 50,
-                          decoration:
-                              BoxDecoration(
-                            color: color,
-                            shape:
-                                BoxShape.circle,
-                            border: Border.all(
-                              color: selected
-                                  ? theme
-                                      .colorScheme
-                                      .primary
-                                  : Colors
-                                      .transparent,
-                              width: 3,
-                            ),
-                            boxShadow:
-                                selected
-                                    ? [
-                                        BoxShadow(
-                                          color: theme
-                                              .colorScheme
-                                              .primary
-                                              .withValues(
-                                            alpha:
-                                                0.25,
-                                          ),
-                                          blurRadius:
-                                              10,
-                                        ),
-                                      ]
-                                    : null,
-                          ),
-                          child: selected
-                              ? Icon(
-                                  Icons.check,
-                                  color: theme
-                                      .colorScheme
-                                      .primary,
-                                )
-                              : null,
+                        Navigator.pop(context);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(
+                          milliseconds: 180,
                         ),
-                      );
-                    },
-                  ).toList(),
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selected
+                                ? theme.colorScheme.primary
+                                : Colors.transparent,
+                            width: 3,
+                          ),
+                        ),
+                        child: selected
+                            ? Icon(
+                                Icons.check,
+                                color:
+                                    theme.colorScheme.primary,
+                              )
+                            : null,
+                      ),
+                    );
+                  }).toList(),
                 ),
               ],
             ),
@@ -437,146 +506,94 @@ class _CreateNotePageState extends State<CreateNotePage> {
     );
   }
 
+  // ============================================================
+  // ZOOM
+  // ============================================================
+
   void _showZoomPicker() {
     double tempZoom = _zoom;
 
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor:
-          theme.colorScheme.surface,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(28),
         ),
       ),
       builder: (context) {
         return StatefulBuilder(
-          builder:
-              (context, setModalState) {
+          builder: (context, setModalState) {
             return SafeArea(
               child: Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(
+                padding: const EdgeInsets.fromLTRB(
                   24,
                   18,
                   24,
                   30,
                 ),
                 child: Column(
-                  mainAxisSize:
-                      MainAxisSize.min,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       width: 42,
                       height: 4,
-                      decoration:
-                          BoxDecoration(
-                        color: theme
-                            .dividerColor,
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          10,
-                        ),
+                      decoration: BoxDecoration(
+                        color: theme.dividerColor,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    const SizedBox(
-                      height: 20,
-                    ),
+                    const SizedBox(height: 20),
                     Row(
                       children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration:
-                              BoxDecoration(
-                            color: theme
-                                .colorScheme
-                                .primary
-                                .withValues(
-                              alpha: 0.12,
-                            ),
-                            borderRadius:
-                                BorderRadius
-                                    .circular(
-                              12,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.zoom_in,
-                            color: theme
-                                .colorScheme
-                                .primary,
-                          ),
+                        Icon(
+                          Icons.zoom_in,
+                          color: theme.colorScheme.primary,
                         ),
-                        const SizedBox(
-                          width: 12,
-                        ),
+                        const SizedBox(width: 12),
                         Text(
                           'Editor Zoom',
-                          style: theme
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(
-                            fontWeight:
-                                FontWeight.bold,
+                          style:
+                              theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                         const Spacer(),
                         Text(
                           '${(tempZoom * 100).round()}%',
                           style: TextStyle(
-                            color: theme
-                                .colorScheme
-                                .primary,
-                            fontWeight:
-                                FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(
-                      height: 18,
-                    ),
+                    const SizedBox(height: 18),
                     Slider(
                       value: tempZoom,
                       min: 0.8,
                       max: 1.6,
                       divisions: 16,
-                      onChanged:
-                          (value) {
+                      onChanged: (value) {
                         setModalState(() {
                           tempZoom = value;
                         });
                       },
                     ),
-                    const SizedBox(
-                      height: 8,
-                    ),
+                    const SizedBox(height: 8),
                     SizedBox(
-                      width:
-                          double.infinity,
-                      child:
-                          FilledButton(
+                      width: double.infinity,
+                      child: FilledButton(
                         onPressed: () {
                           setState(() {
-                            _zoom =
-                                tempZoom;
+                            _zoom = tempZoom;
                           });
 
-                          Navigator.pop(
-                            context,
-                          );
+                          Navigator.pop(context);
                         },
-                        child:
-                            const Text(
-                          'Apply',
-                        ),
+                        child: const Text('Apply'),
                       ),
                     ),
                   ],
@@ -589,292 +606,140 @@ class _CreateNotePageState extends State<CreateNotePage> {
     );
   }
 
-  void _applyAttribute(
-    Attribute attribute,
-  ) {
-    final selection =
-        _controller.selection;
-
-    _controller.formatSelection(
-      attribute,
-    );
-
-    _controller.updateSelection(
-      selection,
-      ChangeSource.local,
-    );
-  }
-
-  void _applyValueAttribute(
-    String key,
-    String value,
-  ) {
-    final selection =
-        _controller.selection;
-
-    _controller.formatSelection(
-      Attribute.fromKeyValue(
-        key,
-        value,
-      ),
-    );
-
-    _controller.updateSelection(
-      selection,
-      ChangeSource.local,
-    );
-  }
-
-  void _applyFont(String font) {
-    final selection =
-        _controller.selection;
-
-    _controller.formatSelection(
-      Attribute.fromKeyValue(
-        Attribute.font.key,
-        font,
-      ),
-    );
-
-    _controller.updateSelection(
-      selection,
-      ChangeSource.local,
-    );
-  }
-
-  void _applyFontSize(
-    String size,
-  ) {
-    final selection =
-        _controller.selection;
-
-    _controller.formatSelection(
-      Attribute.fromKeyValue(
-        Attribute.size.key,
-        size,
-      ),
-    );
-
-    _controller.updateSelection(
-      selection,
-      ChangeSource.local,
-    );
-  }
-
-  String _getCurrentFont() {
-    final attributes = _controller
-        .getSelectionStyle()
-        .attributes;
-
-    return attributes[
-                Attribute.font.key]
-            ?.value
-            ?.toString() ??
-        'Poppins';
-  }
-
-  String _getCurrentFontSize() {
-    final attributes = _controller
-        .getSelectionStyle()
-        .attributes;
-
-    return attributes[
-                Attribute.size.key]
-            ?.value
-            ?.toString() ??
-        '16';
-  }
+  // ============================================================
+  // FONT PICKER
+  // ============================================================
 
   void _showFontFamilyPicker() {
-    final currentFont =
-        _getCurrentFont();
-
-    final theme =
-        Theme.of(context);
+    final currentFont = _getCurrentFont();
+    final theme = Theme.of(context);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor:
-          theme.colorScheme.surface,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(28),
         ),
       ),
       builder: (context) {
         return SafeArea(
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(
-              vertical: 12,
-            ),
-            child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
-              children:
-                  _fontFamilies.map(
-                (font) {
-                  final selected =
-                      currentFont ==
-                          font;
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: _fontFamilies.map((font) {
+              final selected = currentFont == font;
 
-                  return ListTile(
-                    contentPadding:
-                        const EdgeInsets
-                            .symmetric(
-                      horizontal: 24,
-                    ),
-                    leading:
-                        Container(
-                      width: 42,
-                      height: 42,
-                      decoration:
-                          BoxDecoration(
-                        color: theme
-                            .colorScheme
-                            .primary
-                            .withValues(
-                          alpha: 0.10,
-                        ),
-                        borderRadius:
-                            BorderRadius
-                                .circular(
-                          12,
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.font_download_outlined,
-                        color: theme
-                            .colorScheme
-                            .primary,
-                      ),
-                    ),
-                    title: Text(
-                      font,
-                      style:
-                          TextStyle(
-                        fontFamily:
-                            font,
-                        fontSize: 17,
-                        color: theme
-                            .colorScheme
-                            .onSurface,
-                      ),
-                    ),
-                    trailing:
-                        selected
-                            ? Icon(
-                                Icons.check_circle,
-                                color: theme
-                                    .colorScheme
-                                    .primary,
-                              )
-                            : null,
-                    onTap: () {
-                      _applyFont(
-                        font,
-                      );
-
-                      Navigator.pop(
-                        context,
-                      );
-                    },
-                  );
+              return ListTile(
+                title: Text(
+                  font,
+                  style: TextStyle(
+                    fontFamily: font,
+                    fontSize: 17,
+                  ),
+                ),
+                trailing: selected
+                    ? Icon(
+                        Icons.check_circle,
+                        color: theme.colorScheme.primary,
+                      )
+                    : null,
+                onTap: () {
+                  _applyFont(font);
+                  Navigator.pop(context);
                 },
-              ).toList(),
-            ),
+              );
+            }).toList(),
           ),
         );
       },
     );
   }
+
+  // ============================================================
+  // FONT SIZE PICKER
+  // ============================================================
 
   void _showFontSizePicker() {
-    final currentSize =
-        _getCurrentFontSize();
-
-    final theme =
-        Theme.of(context);
+    final currentSize = _getCurrentFontSize();
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor:
-          theme.colorScheme.surface,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(28),
         ),
       ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(
-              vertical: 12,
+            padding: const EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              24,
             ),
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
-              children:
-                  _fontSizes.map(
-                (size) {
-                  final selected =
-                      currentSize ==
-                          size;
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Font Size',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _fontSizes.map((size) {
+                    final selected =
+                        size == currentSize;
 
-                  return ListTile(
-                    contentPadding:
-                        const EdgeInsets
-                            .symmetric(
-                      horizontal: 24,
-                    ),
-                    title: Text(
-                      size,
-                      style:
-                          TextStyle(
-                        fontSize: 17,
-                        color: theme
-                            .colorScheme
-                            .onSurface,
-                        fontWeight:
-                            selected
-                                ? FontWeight
-                                    .bold
-                                : FontWeight
-                                    .normal,
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        _applyFontSize(size);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        width: 64,
+                        height: 52,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? colors.primary
+                              : colors.surfaceContainerHighest,
+                          borderRadius:
+                              BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          size,
+                          style: TextStyle(
+                            color: selected
+                                ? Colors.white
+                                : colors.onSurface,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
-                    trailing:
-                        selected
-                            ? Icon(
-                                Icons.check_circle,
-                                color: theme
-                                    .colorScheme
-                                    .primary,
-                              )
-                            : null,
-                    onTap: () {
-                      _applyFontSize(
-                        size,
-                      );
-
-                      Navigator.pop(
-                        context,
-                      );
-                    },
-                  );
-                },
-              ).toList(),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
           ),
         );
       },
     );
   }
+
+  // ============================================================
+  // TEXT COLORS
+  // ============================================================
 
   void _showTextColorPicker() {
     final colors = [
@@ -916,8 +781,7 @@ class _CreateNotePageState extends State<CreateNotePage> {
       title: 'Text Background',
       colors: colors,
       onSelected: (color) {
-        if (color ==
-            Colors.transparent) {
+        if (color == Colors.transparent) {
           _controller.formatSelection(
             Attribute.fromKeyValue(
               Attribute.background.key,
@@ -930,6 +794,13 @@ class _CreateNotePageState extends State<CreateNotePage> {
             '#${color.value.toRadixString(16).substring(2)}',
           );
         }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+
+          _currentPageData.focusNode.requestFocus();
+          setState(() {});
+        });
       },
     );
   }
@@ -937,125 +808,69 @@ class _CreateNotePageState extends State<CreateNotePage> {
   void _showColorSheet({
     required String title,
     required List<Color> colors,
-    required ValueChanged<Color>
-        onSelected,
+    required ValueChanged<Color> onSelected,
   }) {
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor:
-          theme.colorScheme.surface,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
           top: Radius.circular(28),
         ),
       ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding:
-                const EdgeInsets.fromLTRB(
+            padding: const EdgeInsets.fromLTRB(
               24,
               18,
               24,
               30,
             ),
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
-              crossAxisAlignment:
-                  CrossAxisAlignment
-                      .start,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration:
-                        BoxDecoration(
-                      color: theme
-                          .dividerColor,
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        10,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(
-                  height: 20,
-                ),
                 Text(
                   title,
-                  style: theme
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(
-                    fontWeight:
-                        FontWeight.bold,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(
-                  height: 20,
-                ),
+                const SizedBox(height: 20),
                 Wrap(
                   spacing: 14,
                   runSpacing: 14,
-                  children:
-                      colors.map(
-                    (color) {
-                      return GestureDetector(
-                        onTap: () {
-                          onSelected(
-                            color,
-                          );
-
-                          Navigator.pop(
-                            context,
-                          );
-                        },
-                        child:
-                            Container(
-                          width: 46,
-                          height: 46,
-                          decoration:
-                              BoxDecoration(
-                            color:
-                                color ==
-                                        Colors
-                                            .transparent
-                                    ? theme
-                                        .colorScheme
-                                        .surface
-                                    : color,
-                            shape:
-                                BoxShape.circle,
-                            border:
-                                Border.all(
-                              color: theme
-                                  .dividerColor,
-                            ),
+                  children: colors.map((color) {
+                    return GestureDetector(
+                      onTap: () {
+                        onSelected(color);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: color == Colors.transparent
+                              ? theme.colorScheme.surface
+                              : color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: theme.dividerColor,
                           ),
-                          child:
-                              color ==
-                                      Colors
-                                          .transparent
-                                  ? Icon(
-                                      Icons.clear,
-                                      color: theme
-                                          .colorScheme
-                                          .onSurface,
-                                    )
-                                  : null,
                         ),
-                      );
-                    },
-                  ).toList(),
+                        child: color == Colors.transparent
+                            ? Icon(
+                                Icons.clear,
+                                color:
+                                    theme.colorScheme.onSurface,
+                              )
+                            : null,
+                      ),
+                    );
+                  }).toList(),
                 ),
               ],
             ),
@@ -1065,46 +880,32 @@ class _CreateNotePageState extends State<CreateNotePage> {
     );
   }
 
+  // ============================================================
+  // TOOLBAR
+  // ============================================================
+
   Widget _toolbarButton({
     required IconData icon,
     required String tooltip,
     required VoidCallback onPressed,
     bool selected = false,
   }) {
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
     return Padding(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 2,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
       child: IconButton(
         tooltip: tooltip,
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: selected
-              ? theme.colorScheme.primary
-                  .withValues(
-                  alpha: 0.16,
-                )
+              ? theme.colorScheme.primary.withValues(alpha: 0.16)
               : Colors.transparent,
           foregroundColor: selected
-              ? theme
-                  .colorScheme
-                  .primary
-              : theme
-                  .colorScheme
-                  .onSurface
-                  .withValues(
-                  alpha: 0.78,
-                ),
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(
-              10,
-            ),
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurface.withValues(alpha: 0.78),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
         ),
         icon: Icon(
@@ -1115,115 +916,89 @@ class _CreateNotePageState extends State<CreateNotePage> {
     );
   }
 
-  bool _hasAttribute(String key) {
-    return _controller
-        .getSelectionStyle()
-        .attributes
-        .containsKey(key);
-  }
-
   Widget _buildToolbar() {
     return SingleChildScrollView(
-      scrollDirection:
-          Axis.horizontal,
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 8,
-      ),
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
           _toolbarButton(
             icon: Icons.font_download_outlined,
             tooltip: 'Font Family',
-            onPressed:
-                _showFontFamilyPicker,
+            onPressed: _showFontFamilyPicker,
           ),
+
           _toolbarButton(
             icon: Icons.format_size,
             tooltip: 'Font Size',
-            onPressed:
-                _showFontSizePicker,
+            onPressed: _showFontSizePicker,
           ),
+
           _toolbarButton(
             icon: Icons.format_bold,
             tooltip: 'Bold',
-            selected: _hasAttribute(
-              Attribute.bold.key,
-            ),
+            selected: _hasAttribute(Attribute.bold.key),
             onPressed: () {
-              _applyAttribute(
-                Attribute.bold,
-              );
+              _applyAttribute(Attribute.bold);
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_italic,
             tooltip: 'Italic',
-            selected: _hasAttribute(
-              Attribute.italic.key,
-            ),
+            selected: _hasAttribute(Attribute.italic.key),
             onPressed: () {
-              _applyAttribute(
-                Attribute.italic,
-              );
+              _applyAttribute(Attribute.italic);
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_underlined,
             tooltip: 'Underline',
-            selected: _hasAttribute(
-              Attribute.underline.key,
-            ),
+            selected: _hasAttribute(Attribute.underline.key),
             onPressed: () {
-              _applyAttribute(
-                Attribute.underline,
-              );
+              _applyAttribute(Attribute.underline);
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_strikethrough,
             tooltip: 'Strike',
-            selected: _hasAttribute(
-              Attribute.strikeThrough.key,
-            ),
+            selected:
+                _hasAttribute(Attribute.strikeThrough.key),
             onPressed: () {
-              _applyAttribute(
-                Attribute.strikeThrough,
-              );
+              _applyAttribute(Attribute.strikeThrough);
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_color_text,
             tooltip: 'Text Color',
-            onPressed:
-                _showTextColorPicker,
+            onPressed: _showTextColorPicker,
           ),
+
           _toolbarButton(
             icon: Icons.format_color_fill,
-            tooltip:
-                'Background Color',
-            onPressed:
-                _showBackgroundColorPicker,
+            tooltip: 'Background Color',
+            onPressed: _showBackgroundColorPicker,
           ),
+
           _toolbarButton(
             icon: Icons.format_list_numbered,
-            tooltip:
-                'Numbered List',
+            tooltip: 'Numbered List',
             onPressed: () {
-              _applyAttribute(
-                Attribute.ol,
-              );
+              _applyAttribute(Attribute.ol);
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_list_bulleted,
             tooltip: 'Bullet List',
             onPressed: () {
-              _applyAttribute(
-                Attribute.ul,
-              );
+              _applyAttribute(Attribute.ul);
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_align_left,
             tooltip: 'Align Left',
@@ -1234,6 +1009,7 @@ class _CreateNotePageState extends State<CreateNotePage> {
               );
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_align_center,
             tooltip: 'Align Center',
@@ -1244,6 +1020,7 @@ class _CreateNotePageState extends State<CreateNotePage> {
               );
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_align_right,
             tooltip: 'Align Right',
@@ -1254,47 +1031,59 @@ class _CreateNotePageState extends State<CreateNotePage> {
               );
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_indent_increase,
             tooltip: 'Indent',
             onPressed: () {
-              _applyAttribute(
-                Attribute.indentL1,
-              );
+              _applyAttribute(Attribute.indentL1);
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_quote,
             tooltip: 'Quote',
             onPressed: () {
-              _applyAttribute(
-                Attribute.blockQuote,
-              );
+              _applyAttribute(Attribute.blockQuote);
             },
           ),
+
           _toolbarButton(
             icon: Icons.undo,
             tooltip: 'Undo',
             onPressed: () {
               _controller.undo();
+
+              if (mounted) {
+                setState(() {});
+              }
             },
           ),
+
           _toolbarButton(
             icon: Icons.redo,
             tooltip: 'Redo',
             onPressed: () {
               _controller.redo();
+
+              if (mounted) {
+                setState(() {});
+              }
             },
           ),
+
           _toolbarButton(
             icon: Icons.format_clear,
-            tooltip:
-                'Clear Formatting',
+            tooltip: 'Clear Formatting',
             onPressed: () {
-              _controller
-                  .formatSelection(
-                null,
-              );
+              _controller.formatSelection(null);
+
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+
+                _currentPageData.focusNode.requestFocus();
+                setState(() {});
+              });
             },
           ),
         ],
@@ -1302,49 +1091,33 @@ class _CreateNotePageState extends State<CreateNotePage> {
     );
   }
 
-  Widget _buildEditor() {
-    final theme =
-        Theme.of(context);
+  // ============================================================
+  // EDITOR
+  // ============================================================
 
-    final isLandscape =
-        _currentPageData
-            .isLandscape;
+  Widget _buildEditor() {
+    final theme = Theme.of(context);
 
     final height =
-        isLandscape ? 360.0 : 520.0;
+        _currentPageData.isLandscape ? 360.0 : 520.0;
 
     return Container(
       width: double.infinity,
       height: height,
-      decoration:
-          BoxDecoration(
-        color: theme
-            .colorScheme
-            .surface,
-        borderRadius:
-            BorderRadius.circular(
-          22,
-        ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: theme
-              .dividerColor
-              .withValues(
-            alpha: 0.25,
-          ),
+          color: theme.dividerColor.withValues(alpha: 0.25),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black
-                .withValues(
+            color: Colors.black.withValues(
               alpha:
-                  theme.brightness ==
-                          Brightness.dark
-                      ? 0.22
-                      : 0.06,
+                  theme.brightness == Brightness.dark ? 0.22 : 0.06,
             ),
             blurRadius: 20,
-            offset:
-                const Offset(0, 8),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -1352,39 +1125,24 @@ class _CreateNotePageState extends State<CreateNotePage> {
         children: [
           Container(
             height: 58,
-            decoration:
-                BoxDecoration(
-              color: theme
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(
-                alpha: 0.42,
-              ),
-              borderRadius:
-                  const BorderRadius
-                      .vertical(
-                top:
-                    Radius.circular(
-                  22,
-                ),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.42),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(22),
               ),
             ),
-            child:
-                _buildToolbar(),
+            child: _buildToolbar(),
           ),
+
           Divider(
             height: 1,
-            color: theme
-                .dividerColor
-                .withValues(
-              alpha: 0.25,
-            ),
+            color: theme.dividerColor.withValues(alpha: 0.25),
           ),
+
           Expanded(
             child: Padding(
-              padding:
-                  const EdgeInsets
-                      .fromLTRB(
+              padding: const EdgeInsets.fromLTRB(
                 20,
                 18,
                 20,
@@ -1392,28 +1150,20 @@ class _CreateNotePageState extends State<CreateNotePage> {
               ),
               child: Transform.scale(
                 scale: _zoom,
-                alignment:
-                    Alignment.topLeft,
-                child:
-                    QuillEditor.basic(
-                  controller:
-                      _controller,
-                  config:
-                      const QuillEditorConfig(
-                    placeholder:
-                        'Start writing...',
-                    padding:
-                        EdgeInsets.zero,
-                    autoFocus:
-                        false,
-                    expands:
-                        true,
-                    scrollable:
-                        true,
-                    showCursor:
-                        true,
-                    enableInteractiveSelection:
-                        true,
+                alignment: Alignment.topLeft,
+                child: QuillEditor.basic(
+                  controller: _controller,
+                  focusNode: _currentPageData.focusNode,
+                  scrollController:
+                      _currentPageData.scrollController,
+                  config: const QuillEditorConfig(
+                    placeholder: 'Start writing...',
+                    padding: EdgeInsets.zero,
+                    autoFocus: false,
+                    expands: true,
+                    scrollable: true,
+                    showCursor: true,
+                    enableInteractiveSelection: true,
                   ),
                 ),
               ),
@@ -1424,261 +1174,171 @@ class _CreateNotePageState extends State<CreateNotePage> {
     );
   }
 
+  // ============================================================
+  // PAGE NAVIGATION
+  // ============================================================
+
   Widget _buildPageNavigation() {
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 8,
         vertical: 8,
       ),
-      decoration:
-          BoxDecoration(
-        color: theme
-            .colorScheme
-            .surface,
-        borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: theme
-              .dividerColor
-              .withValues(
-            alpha: 0.25,
-          ),
+          color: theme.dividerColor.withValues(alpha: 0.25),
         ),
       ),
       child: Row(
         children: [
           IconButton(
             onPressed:
-                _currentPage > 0
-                    ? _previousPage
-                    : null,
-            style:
-                IconButton.styleFrom(
-              backgroundColor:
-                  theme
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(
-                    alpha: 0.5,
-                  ),
+                _currentPage > 0 ? _previousPage : null,
+            style: IconButton.styleFrom(
+              backgroundColor: theme
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.5),
             ),
-            icon: const Icon(
-              Icons.chevron_left,
-            ),
+            icon: const Icon(Icons.chevron_left),
           ),
+
           Expanded(
             child: Column(
               children: [
                 Text(
                   'PAGE ${_currentPage + 1}',
                   style: TextStyle(
-                    color: theme
-                        .colorScheme
-                        .primary,
+                    color: theme.colorScheme.primary,
                     fontSize: 11,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
                   ),
                 ),
-                const SizedBox(
-                  height: 2,
-                ),
+                const SizedBox(height: 2),
                 Text(
                   'of ${_pages.length}',
-                  style: theme
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(
-                    color: theme
-                        .colorScheme
-                        .onSurface
-                        .withValues(
-                      alpha: 0.55,
-                    ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.55),
                   ),
                 ),
               ],
             ),
           ),
+
           IconButton(
             onPressed:
-                _currentPage <
-                        _pages.length -
-                            1
-                    ? _nextPage
-                    : null,
-            style:
-                IconButton.styleFrom(
-              backgroundColor:
-                  theme
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(
-                    alpha: 0.5,
-                  ),
+                _currentPage < _pages.length - 1 ? _nextPage : null,
+            style: IconButton.styleFrom(
+              backgroundColor: theme
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.5),
             ),
-            icon: const Icon(
-              Icons.chevron_right,
-            ),
+            icon: const Icon(Icons.chevron_right),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAttachments() {
-    final theme =
-        Theme.of(context);
+  // ============================================================
+  // ATTACHMENTS
+  // ============================================================
 
-    if (_imagePaths.isEmpty &&
-        _pdfs.isEmpty) {
-      return const SizedBox
-          .shrink();
+  Widget _buildAttachments() {
+    final theme = Theme.of(context);
+
+    if (_imagePaths.isEmpty && _pdfs.isEmpty) {
+      return const SizedBox.shrink();
     }
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(
-          height: 22,
-        ),
+        const SizedBox(height: 22),
+
         Row(
           children: [
             Icon(
               Icons.attach_file,
               size: 20,
-              color: theme
-                  .colorScheme
-                  .primary,
+              color: theme.colorScheme.primary,
             ),
-            const SizedBox(
-              width: 8,
-            ),
+            const SizedBox(width: 8),
             Text(
               'Attachments',
-              style: theme
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(
-                fontWeight:
-                    FontWeight.bold,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
         ),
-        const SizedBox(
-          height: 12,
-        ),
-        if (_imagePaths
-            .isNotEmpty)
+
+        const SizedBox(height: 12),
+
+        if (_imagePaths.isNotEmpty)
           SizedBox(
             height: 105,
-            child:
-                ListView.separated(
-              scrollDirection:
-                  Axis.horizontal,
-              itemCount:
-                  _imagePaths.length,
-              separatorBuilder:
-                  (_, __) =>
-                      const SizedBox(
-                width: 10,
-              ),
-              itemBuilder:
-                  (context, index) {
-                final path =
-                    _imagePaths[
-                        index];
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _imagePaths.length,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final path = _imagePaths[index];
 
                 return Stack(
                   children: [
                     ClipRRect(
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        16,
-                      ),
-                      child:
-                          Image.file(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.file(
                         File(path),
                         width: 105,
                         height: 105,
-                        fit: BoxFit
-                            .cover,
+                        fit: BoxFit.cover,
                         errorBuilder:
-                            (
-                          context,
-                          error,
-                          stackTrace,
-                        ) {
+                            (context, error, stackTrace) {
                           return Container(
                             width: 105,
                             height: 105,
-                            decoration:
-                                BoxDecoration(
+                            decoration: BoxDecoration(
                               color: theme
                                   .colorScheme
                                   .surfaceContainerHighest,
                               borderRadius:
-                                  BorderRadius
-                                      .circular(
-                                16,
-                              ),
+                                  BorderRadius.circular(16),
                             ),
-                            child:
-                                Icon(
-                              Icons
-                                  .broken_image_outlined,
-                              color: theme
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(
-                                alpha:
-                                    0.55,
-                              ),
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.55),
                             ),
                           );
                         },
                       ),
                     ),
+
                     Positioned(
                       top: 6,
                       right: 6,
-                      child:
-                          GestureDetector(
-                        onTap: () =>
-                            _removeImage(
-                          index,
-                        ),
-                        child:
-                            Container(
+                      child: GestureDetector(
+                        onTap: () => _removeImage(index),
+                        child: Container(
                           width: 28,
                           height: 28,
-                          decoration:
-                              BoxDecoration(
-                            color: Colors
-                                .black
-                                .withValues(
-                              alpha:
-                                  0.62,
-                            ),
-                            shape:
-                                BoxShape
-                                    .circle,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.62),
+                            shape: BoxShape.circle,
                           ),
-                          child:
-                              const Icon(
+                          child: const Icon(
                             Icons.close,
-                            color: Colors
-                                .white,
+                            color: Colors.white,
                             size: 17,
                           ),
                         ),
@@ -1689,45 +1349,29 @@ class _CreateNotePageState extends State<CreateNotePage> {
               },
             ),
           ),
+
         if (_pdfs.isNotEmpty)
-          const SizedBox(
-            height: 12,
-          ),
+          const SizedBox(height: 12),
+
         ...List.generate(
           _pdfs.length,
           (index) {
-            final pdf =
-                _pdfs[index];
+            final pdf = _pdfs[index];
 
             return Container(
-              margin:
-                  const EdgeInsets.only(
-                bottom: 8,
-              ),
-              padding:
-                  const EdgeInsets
-                      .symmetric(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 12,
               ),
-              decoration:
-                  BoxDecoration(
+              decoration: BoxDecoration(
                 color: theme
                     .colorScheme
                     .surfaceContainerHighest
-                    .withValues(
-                  alpha: 0.42,
-                ),
-                borderRadius:
-                    BorderRadius.circular(
-                  16,
-                ),
+                    .withValues(alpha: 0.42),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: theme
-                      .dividerColor
-                      .withValues(
-                    alpha: 0.22,
-                  ),
+                  color: theme.dividerColor.withValues(alpha: 0.22),
                 ),
               ),
               child: Row(
@@ -1735,52 +1379,33 @@ class _CreateNotePageState extends State<CreateNotePage> {
                   Container(
                     width: 42,
                     height: 42,
-                    decoration:
-                        BoxDecoration(
-                      color: theme
-                          .colorScheme
-                          .primary
-                          .withValues(
-                        alpha: 0.12,
-                      ),
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        12,
-                      ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
-                      Icons
-                          .picture_as_pdf,
-                      color: theme
-                          .colorScheme
-                          .primary,
+                      Icons.picture_as_pdf,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
-                  const SizedBox(
-                    width: 12,
-                  ),
+
+                  const SizedBox(width: 12),
+
                   Expanded(
                     child: Text(
                       pdf.name,
                       maxLines: 1,
-                      overflow:
-                          TextOverflow
-                              .ellipsis,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontWeight:
-                            FontWeight.w600,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
+
                   IconButton(
-                    onPressed: () =>
-                        _removePdf(
-                      index,
-                    ),
-                    icon: const Icon(
-                      Icons.close,
-                    ),
+                    onPressed: () => _removePdf(index),
+                    icon: const Icon(Icons.close),
                   ),
                 ],
               ),
@@ -1791,544 +1416,290 @@ class _CreateNotePageState extends State<CreateNotePage> {
     );
   }
 
+  // ============================================================
+  // SAVE
+  // ============================================================
+
   Future<void> _saveNote() async {
-    FocusManager.instance
-        .primaryFocus
-        ?.unfocus();
+    _currentPageData.focusNode.unfocus();
 
-    final now =
-        DateTime.now();
+    FocusManager.instance.primaryFocus?.unfocus();
 
-    final pages =
-        _pages.map((page) {
-      final data = page
-          .controller.document
-          .toDelta()
-          .toJson();
+    final now = DateTime.now();
+
+    final pages = _pages.map((page) {
+      final data =
+          page.controller.document.toDelta().toJson();
 
       return NotePageModel(
         id: page.id,
         quillData: data,
-        isLandscape:
-            page.isLandscape,
+        isLandscape: page.isLandscape,
       );
     }).toList();
 
-    final firstPageData =
-        pages.first.quillData;
+    final firstPageData = pages.first.quillData;
 
     final note = NoteModel(
       id: widget.note?.id ??
-          DateTime.now()
-              .microsecondsSinceEpoch
-              .toString(),
-      title: _titleController
-              .text
-              .trim()
-              .isEmpty
+          DateTime.now().microsecondsSinceEpoch.toString(),
+
+      title: _titleController.text.trim().isEmpty
           ? 'Untitled Note'
-          : _titleController
-              .text
-              .trim(),
+          : _titleController.text.trim(),
+
       quillData: firstPageData,
       pages: pages,
       isPinned: _isPinned,
       colorValue: _colorValue,
-      imagePaths:
-          List<String>.from(
-        _imagePaths,
-      ),
-      pdfs:
-          List<PdfAttachment>.from(
-        _pdfs,
-      ),
-      createdAt:
-          widget.note?.createdAt ??
-              now,
+      imagePaths: List<String>.from(_imagePaths),
+      pdfs: List<PdfAttachment>.from(_pdfs),
+      createdAt: widget.note?.createdAt ?? now,
       updatedAt: now,
     );
 
     if (!mounted) return;
 
-    Navigator.of(context)
-        .pop(note);
+    Navigator.of(context).pop(note);
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme =
-        Theme.of(context);
-
-    final colors =
-        theme.colorScheme;
-
-    final isDark =
-        theme.brightness ==
-            Brightness.dark;
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor:
-          colors.surface,
+      backgroundColor: colors.surface,
+      resizeToAvoidBottomInset: true,
+
       appBar: AppBar(
-        backgroundColor:
-            colors.surface,
-        foregroundColor:
-            colors.onSurface,
-        surfaceTintColor:
-            Colors.transparent,
+        backgroundColor: colors.surface,
+        foregroundColor: colors.onSurface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        scrolledUnderElevation:
-            0,
+        scrolledUnderElevation: 0,
+
         leading: Padding(
-          padding:
-              const EdgeInsets
-                  .only(
-            left: 8,
-          ),
+          padding: const EdgeInsets.only(left: 8),
           child: IconButton(
             tooltip: 'Back',
             onPressed: () {
-              Navigator.of(
-                context,
-              ).pop();
+              Navigator.of(context).pop();
             },
-            style:
-                IconButton.styleFrom(
+            style: IconButton.styleFrom(
               backgroundColor:
-                  colors
-                      .surfaceContainerHighest
-                      .withValues(
-                alpha:
-                    isDark ? 0.55 : 0.7,
+                  colors.surfaceContainerHighest.withValues(
+                alpha: isDark ? 0.55 : 0.7,
               ),
             ),
-            icon: const Icon(
-              Icons.arrow_back,
-            ),
+            icon: const Icon(Icons.arrow_back),
           ),
         ),
+
         titleSpacing: 8,
+
         title: Row(
           children: [
             Container(
               width: 8,
               height: 30,
-              decoration:
-                  BoxDecoration(
-                color: Color(
-                  _colorValue,
-                ),
-                borderRadius:
-                    BorderRadius
-                        .circular(
-                  10,
-                ),
+              decoration: BoxDecoration(
+                color: Color(_colorValue),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
-            const SizedBox(
-              width: 12,
-            ),
+
+            const SizedBox(width: 12),
+
             Expanded(
               child: TextField(
-                controller:
-                    _titleController,
+                controller: _titleController,
                 maxLines: 1,
-                textInputAction:
-                    TextInputAction.done,
+                textInputAction: TextInputAction.done,
                 style: TextStyle(
-                  color: colors
-                      .onSurface,
+                  color: colors.onSurface,
                   fontSize: 19,
-                  fontWeight:
-                      FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                 ),
-                decoration:
-                    InputDecoration(
-                  hintText:
-                      'Note title',
-                  hintStyle:
-                      TextStyle(
-                    color: colors
-                        .onSurface
-                        .withValues(
-                      alpha: 0.45,
-                    ),
+                decoration: InputDecoration(
+                  hintText: 'Note title',
+                  hintStyle: TextStyle(
+                    color: colors.onSurface.withValues(alpha: 0.45),
                     fontSize: 19,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
-                  border:
-                      InputBorder.none,
+                  border: InputBorder.none,
                   isDense: true,
-                  contentPadding:
-                      EdgeInsets.zero,
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
             ),
           ],
         ),
+
         actions: [
           IconButton(
-            tooltip:
-                'Note color',
-            onPressed:
-                _showColorPicker,
-            style:
-                IconButton.styleFrom(
-              backgroundColor:
-                  colors
-                      .surfaceContainerHighest
-                      .withValues(
-                alpha:
-                    isDark ? 0.55 : 0.7,
-              ),
-            ),
+            tooltip: 'Note color',
+            onPressed: _showColorPicker,
             icon: Icon(
               Icons.palette_outlined,
-              color:
-                  colors.primary,
+              color: colors.primary,
             ),
           ),
+
           IconButton(
             tooltip: 'Zoom',
-            onPressed:
-                _showZoomPicker,
-            style:
-                IconButton.styleFrom(
-              backgroundColor:
-                  colors
-                      .surfaceContainerHighest
-                      .withValues(
-                alpha:
-                    isDark ? 0.55 : 0.7,
-              ),
-            ),
+            onPressed: _showZoomPicker,
             icon: Icon(
               Icons.zoom_in,
-              color:
-                  colors.primary,
+              color: colors.primary,
             ),
           ),
+
           IconButton(
-            tooltip:
-                'Orientation',
-            onPressed:
-                _toggleOrientation,
-            style:
-                IconButton.styleFrom(
-              backgroundColor:
-                  colors
-                      .surfaceContainerHighest
-                      .withValues(
-                alpha:
-                    isDark ? 0.55 : 0.7,
-              ),
-            ),
+            tooltip: 'Orientation',
+            onPressed: _toggleOrientation,
             icon: Icon(
-              _currentPageData
-                      .isLandscape
-                  ? Icons
-                      .stay_current_landscape
-                  : Icons
-                      .stay_current_portrait,
-              color:
-                  colors.primary,
+              _currentPageData.isLandscape
+                  ? Icons.stay_current_landscape
+                  : Icons.stay_current_portrait,
+              color: colors.primary,
             ),
           ),
+
           IconButton(
             tooltip: 'Pin',
             onPressed: () {
               setState(() {
-                _isPinned =
-                    !_isPinned;
+                _isPinned = !_isPinned;
               });
             },
-            style:
-                IconButton.styleFrom(
-              backgroundColor:
-                  _isPinned
-                      ? colors
-                          .primary
-                          .withValues(
-                          alpha: 0.16,
-                        )
-                      : colors
-                          .surfaceContainerHighest
-                          .withValues(
-                          alpha:
-                              isDark
-                                  ? 0.55
-                                  : 0.7,
-                        ),
-            ),
             icon: Icon(
               _isPinned
                   ? Icons.push_pin
-                  : Icons
-                      .push_pin_outlined,
+                  : Icons.push_pin_outlined,
               color: _isPinned
                   ? colors.primary
-                  : colors
-                      .onSurface
-                      .withValues(
-                    alpha: 0.75,
-                  ),
+                  : colors.onSurface.withValues(alpha: 0.75),
             ),
           ),
-          const SizedBox(
-            width: 4,
-          ),
+
+          const SizedBox(width: 4),
+
           Padding(
-            padding:
-                const EdgeInsets
-                    .only(
-              right: 10,
-            ),
-            child:
-                IconButton(
+            padding: const EdgeInsets.only(right: 10),
+            child: IconButton(
               tooltip: 'Save',
-              onPressed:
-                  _saveNote,
-              style:
-                  IconButton.styleFrom(
-                backgroundColor:
-                    colors.primary,
-                foregroundColor:
-                    Colors.white,
+              onPressed: _saveNote,
+              style: IconButton.styleFrom(
+                backgroundColor: colors.primary,
+                foregroundColor: Colors.white,
               ),
-              icon: const Icon(
-                Icons.check,
-              ),
+              icon: const Icon(Icons.check),
             ),
           ),
         ],
       ),
+
       body: SafeArea(
-        child:
-            SingleChildScrollView(
-          physics:
-              const BouncingScrollPhysics(),
-          padding:
-              const EdgeInsets.fromLTRB(
+        child: ListView(
+          keyboardDismissBehavior:
+              ScrollViewKeyboardDismissBehavior.manual,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(
             16,
             10,
             16,
             32,
           ),
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment
-                    .stretch,
-            children: [
-              _buildPageNavigation(),
+          children: [
+            _buildPageNavigation(),
 
-              const SizedBox(
-                height: 14,
-              ),
+            const SizedBox(height: 14),
 
-              _buildEditor(),
+            _buildEditor(),
 
-              const SizedBox(
-                height: 14,
-              ),
+            const SizedBox(height: 14),
 
-              Row(
-                children: [
-                  Expanded(
-                    child:
-                        OutlinedButton.icon(
-                      onPressed:
-                          _addPage,
-                      icon:
-                          const Icon(
-                        Icons.add,
-                      ),
-                      label:
-                          const Text(
-                        'Add Page',
-                      ),
-                      style:
-                          OutlinedButton
-                              .styleFrom(
-                        minimumSize:
-                            const Size(
-                          0,
-                          52,
-                        ),
-                        side:
-                            BorderSide(
-                          color: colors
-                              .primary
-                              .withValues(
-                            alpha:
-                                0.45,
-                          ),
-                        ),
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            15,
-                          ),
-                        ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _addPage,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Page'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
                       ),
                     ),
                   ),
-                  const SizedBox(
-                    width: 10,
-                  ),
-                  Expanded(
-                    child:
-                        OutlinedButton.icon(
-                      onPressed:
-                          _pages.length >
-                                  1
-                              ? _deletePage
-                              : null,
-                      icon:
-                          const Icon(
-                        Icons
-                            .delete_outline,
-                      ),
-                      label:
-                          const Text(
-                        'Delete Page',
-                      ),
-                      style:
-                          OutlinedButton
-                              .styleFrom(
-                        minimumSize:
-                            const Size(
-                          0,
-                          52,
-                        ),
-                        side:
-                            BorderSide(
-                          color: colors
-                              .error
-                              .withValues(
-                            alpha:
-                                0.35,
-                          ),
-                        ),
-                        foregroundColor:
-                            colors.error,
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            15,
-                          ),
-                        ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _pages.length > 1 ? _deletePage : null,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete Page'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 52),
+                      foregroundColor: colors.error,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
 
-              const SizedBox(
-                height: 12,
-              ),
+            const SizedBox(height: 12),
 
-              Row(
-                children: [
-                  Expanded(
-                    child:
-                        OutlinedButton.icon(
-                      onPressed:
-                          _pickImages,
-                      icon:
-                          const Icon(
-                        Icons
-                            .image_outlined,
-                      ),
-                      label:
-                          const Text(
-                        'Add Images',
-                      ),
-                      style:
-                          OutlinedButton
-                              .styleFrom(
-                        minimumSize:
-                            const Size(
-                          0,
-                          52,
-                        ),
-                        side:
-                            BorderSide(
-                          color: colors
-                              .primary
-                              .withValues(
-                            alpha:
-                                0.45,
-                          ),
-                        ),
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            15,
-                          ),
-                        ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickImages,
+                    icon: const Icon(Icons.image_outlined),
+                    label: const Text('Add Images'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
                       ),
                     ),
                   ),
-                  const SizedBox(
-                    width: 10,
-                  ),
-                  Expanded(
-                    child:
-                        OutlinedButton.icon(
-                      onPressed:
-                          _pickPdf,
-                      icon:
-                          const Icon(
-                        Icons
-                            .picture_as_pdf,
-                      ),
-                      label:
-                          const Text(
-                        'Add PDF',
-                      ),
-                      style:
-                          OutlinedButton
-                              .styleFrom(
-                        minimumSize:
-                            const Size(
-                          0,
-                          52,
-                        ),
-                        side:
-                            BorderSide(
-                          color: colors
-                              .primary
-                              .withValues(
-                            alpha:
-                                0.45,
-                          ),
-                        ),
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            15,
-                          ),
-                        ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickPdf,
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: const Text('Add PDF'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
 
-              _buildAttachments(),
-            ],
-          ),
+            _buildAttachments(),
+          ],
         ),
       ),
     );

@@ -1,511 +1,80 @@
+import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:scanly/DocumentModel.dart';
-import 'package:scanly/DocumentsPage.dart';
-import 'package:scanly/EditDocumentPage.dart';
-import 'package:scanly/FavouritesPage.dart';
-import 'package:scanly/ForgotPasswordVerficationPage.dart';
+// ============================================================
+// MAIN PAGES
+// ============================================================
+
 import 'package:scanly/Home_Page.dart';
-import 'package:scanly/ImageToTextPage.dart';
-import 'package:scanly/Login_Page.dart';
-import 'package:scanly/Note_Model.dart';
+import 'package:scanly/DocumentsPage.dart';
+import 'package:scanly/FavouritesPage.dart';
 import 'package:scanly/Notes_Page.dart';
 import 'package:scanly/NotificationPage.dart';
-import 'package:scanly/OnBourding_Page.dart';
-import 'package:scanly/PDFImagesPage.dart';
-import 'package:scanly/PDFPreviewPage.dart';
-import 'package:scanly/ProfilePage.dart';
 import 'package:scanly/QR_Tools_Page.dart';
-import 'package:scanly/Recent_Page.dart';
-import 'package:scanly/Register_page.dart';
 import 'package:scanly/SettingsPage.dart';
+
+// ============================================================
+// AUTH
+// ============================================================
+
+import 'package:scanly/Login_Page.dart';
+import 'package:scanly/Register_page.dart';
 import 'package:scanly/Verfication_Page.dart';
-import 'package:scanly/create_note_page.dart';
-import 'package:scanly/view_note_page.dart';
+import 'package:scanly/ForgotPasswordVerficationPage.dart';
+import 'package:scanly/OnBourding_Page.dart';
+
+// ============================================================
+// DOCUMENTS
+// ============================================================
+
+import 'package:scanly/DocumentModel.dart';
+import 'package:scanly/EditDocumentPage.dart';
+import 'package:scanly/PDFPreviewPage.dart';
 import 'package:scanly/DocumentViewerPage.dart';
 
-class AppRouter {
-  static final GoRouter router = GoRouter(
-    // =========================================
-    // START APP
-    // =========================================
-    // No SplashPage anymore.
-    // Native Launch Screen handles the startup screen.
-    initialLocation: '/login',
+// ============================================================
+// NOTES
+// ============================================================
 
-    routes: [
+import 'package:scanly/Note_Model.dart';
 
-      // =========================================
-      // LOGIN
-      // =========================================
-      GoRoute(
-        path: '/login',
-        name: 'login',
-        builder: (context, state) {
-          return const LoginPage();
-        },
-      ),
+// ============================================================
+// OTHER
+// ============================================================
 
-      // =========================================
-      // REGISTER
-      // =========================================
-      GoRoute(
-        path: '/register',
-        name: 'register',
-        builder: (context, state) {
-          return const RegisterPage();
-        },
-      ),
+import 'package:scanly/PDFImagesPage.dart';
+import 'package:scanly/ImageToTextPage.dart';
+import 'package:scanly/ProfilePage.dart';
+import 'package:scanly/create_note_page.dart';
+import 'package:scanly/view_note_page.dart';
 
-      // =========================================
-      // VERIFICATION
-      // =========================================
-      GoRoute(
-        path: '/verification',
-        name: 'verification',
-        builder: (context, state) {
-          return const VerificationPage();
-        },
-      ),
+// ============================================================
+// GO ROUTER AUTH REFRESH
+// ============================================================
 
-      // =========================================
-      // FORGOT PASSWORD
-      // =========================================
-      GoRoute(
-        path: '/forgot-password-verification',
-        name: 'forgot-password-verification',
-        builder: (context, state) {
-          final email = state.extra is String
-              ? state.extra as String
-              : '';
+class GoRouterRefreshStream extends ChangeNotifier {
+  late final StreamSubscription<User?> _subscription;
 
-          return ForgotPasswordVerificationPage(
-            email: email,
-          );
-        },
-      ),
+  GoRouterRefreshStream(Stream<User?> stream) {
+    _subscription = stream.listen((_) {
+      notifyListeners();
+    });
+  }
 
-      // =========================================
-      // ONBOARDING
-      // =========================================
-      GoRoute(
-        path: '/onboarding',
-        name: 'onboarding',
-        builder: (context, state) {
-          return const OnboardingPage();
-        },
-      ),
-
-      // =========================================
-      // MAIN NAVIGATION
-      // HOME / DOCUMENTS / FAVORITES / SETTINGS
-      // =========================================
-      ShellRoute(
-        builder: (
-          context,
-          state,
-          child,
-        ) {
-          return MainNavigationPage(
-            child: child,
-          );
-        },
-        routes: [
-
-          // =========================================
-          // HOME
-          // =========================================
-          GoRoute(
-            path: '/home',
-            name: 'home',
-            pageBuilder: (
-              context,
-              state,
-            ) {
-              return const NoTransitionPage(
-                child: HomePage(),
-              );
-            },
-          ),
-
-          // =========================================
-          // DOCUMENTS
-          // =========================================
-          GoRoute(
-            path: '/documents',
-            name: 'documents',
-            pageBuilder: (
-              context,
-              state,
-            ) {
-              return const NoTransitionPage(
-                child: DocumentsPage(),
-              );
-            },
-          ),
-
-          // =========================================
-          // FAVORITES
-          // =========================================
-          GoRoute(
-            path: '/favorites',
-            name: 'favorites',
-            pageBuilder: (
-              context,
-              state,
-            ) {
-              return const NoTransitionPage(
-                child: FavoritesPage(),
-              );
-            },
-          ),
-
-          // =========================================
-          // SETTINGS
-          // =========================================
-          GoRoute(
-            path: '/settings',
-            name: 'settings',
-            pageBuilder: (
-              context,
-              state,
-            ) {
-              return const NoTransitionPage(
-                child: SettingsPage(),
-              );
-            },
-          ),
-        ],
-      ),
-
-      // =========================================
-      // ABOUT
-      // =========================================
-      GoRoute(
-        path: '/about',
-        name: 'about',
-        builder: (
-          context,
-          state,
-        ) {
-          return const AboutScanlyPage();
-        },
-      ),
-
-      // =========================================
-      // PDF PREVIEW
-      // =========================================
-      GoRoute(
-        path: '/pdf-preview',
-        name: 'pdf-preview',
-        pageBuilder: (
-          context,
-          state,
-        ) {
-          debugPrint(
-            '🔥🔥🔥 PDF PREVIEW ROUTE MATCHED 🔥🔥🔥',
-          );
-
-          final data = state.extra;
-
-          debugPrint(
-            'PDF ROUTE EXTRA TYPE: ${data.runtimeType}',
-          );
-
-          if (data is! Map) {
-            debugPrint(
-              '❌ PDF ROUTE DATA IS NOT MAP',
-            );
-
-            return const NoTransitionPage(
-              child: Scaffold(
-                body: Center(
-                  child: Text(
-                    'PDF data not found',
-                  ),
-                ),
-              ),
-            );
-          }
-
-          final pdfBytes = data['pdfBytes'];
-          final fileName = data['fileName'];
-          final filePath = data['filePath'];
-          final imagePathsRaw = data['imagePaths'];
-
-          final imagePaths = <String>[];
-
-          if (imagePathsRaw is List) {
-            for (final path in imagePathsRaw) {
-              if (path is String &&
-                  path.isNotEmpty) {
-                imagePaths.add(path);
-              }
-            }
-          }
-
-          debugPrint(
-            'PDF ROUTE BYTES: ${pdfBytes is Uint8List}',
-          );
-
-          debugPrint(
-            'PDF ROUTE FILE NAME: $fileName',
-          );
-
-          debugPrint(
-            'PDF ROUTE FILE PATH: $filePath',
-          );
-
-          debugPrint(
-            'PDF ROUTE IMAGE PATHS: ${imagePaths.length}',
-          );
-
-          if (pdfBytes is! Uint8List ||
-              fileName is! String) {
-            debugPrint(
-              '❌ INVALID PDF ROUTE DATA',
-            );
-
-            return const NoTransitionPage(
-              child: Scaffold(
-                body: Center(
-                  child: Text(
-                    'Invalid PDF data',
-                  ),
-                ),
-              ),
-            );
-          }
-
-          debugPrint(
-            '✅ OPENING PDF PREVIEW PAGE',
-          );
-
-          return NoTransitionPage(
-            child: PDFPreviewPage(
-              pdfBytes: pdfBytes,
-              fileName: fileName,
-              filePath: filePath is String
-                  ? filePath
-                  : null,
-              imagePaths: imagePaths,
-            ),
-          );
-        },
-      ),
-
-      // =========================================
-      // EDIT DOCUMENT
-      // =========================================
-      GoRoute(
-        path: '/edit-document',
-        name: 'edit-document',
-        builder: (
-          context,
-          state,
-        ) {
-          final document = state.extra;
-
-          if (document is! DocumentModel) {
-            return const Scaffold(
-              body: Center(
-                child: Text(
-                  'Document not found',
-                ),
-              ),
-            );
-          }
-
-          return EditDocumentPage(
-            document: document,
-          );
-        },
-      ),
-
-      // =========================================
-      // DOCUMENT VIEWER
-      // =========================================
-      GoRoute(
-        path: '/document-viewer',
-        name: 'document-viewer',
-        builder: (
-          context,
-          state,
-        ) {
-          final document = state.extra;
-
-          if (document is! DocumentModel) {
-            return const Scaffold(
-              body: Center(
-                child: Text(
-                  'Document not found',
-                ),
-              ),
-            );
-          }
-
-          return DocumentViewerPage(
-            document: document,
-          );
-        },
-      ),
-
-      // =========================================
-      // NOTES
-      // =========================================
-      GoRoute(
-        path: '/notes',
-        name: 'notes',
-        builder: (
-          context,
-          state,
-        ) {
-          return const NotesPage();
-        },
-      ),
-
-      // =========================================
-      // CREATE NOTE
-      // =========================================
-      GoRoute(
-        path: '/create-note',
-        name: 'create-note',
-        builder: (
-          context,
-          state,
-        ) {
-          final note = state.extra as NoteModel?;
-
-          return CreateNotePage(
-            note: note,
-          );
-        },
-      ),
-
-      // =========================================
-      // VIEW NOTE
-      // =========================================
-      GoRoute(
-        path: '/view-note',
-        name: 'view-note',
-        builder: (
-          context,
-          state,
-        ) {
-          final note = state.extra;
-
-          if (note is! NoteModel) {
-            return const Scaffold(
-              body: Center(
-                child: Text(
-                  'Note not found',
-                ),
-              ),
-            );
-          }
-
-          return ViewNotePage(
-            note: note,
-          );
-        },
-      ),
-
-      // =========================================
-      // QR TOOLS
-      // =========================================
-      GoRoute(
-        path: '/qr-tools',
-        name: 'qr-tools',
-        builder: (
-          context,
-          state,
-        ) {
-          return const QRToolsPage();
-        },
-      ),
-
-      // =========================================
-      // PDF & IMAGES
-      // =========================================
-      GoRoute(
-        path: '/pdf-images',
-        name: 'pdf-images',
-        builder: (
-          context,
-          state,
-        ) {
-          return const PDFImagesPage();
-        },
-      ),
-
-      // =========================================
-      // RECENT
-      // =========================================
-      GoRoute(
-        path: '/recent',
-        name: 'recent',
-        pageBuilder: (
-          context,
-          state,
-        ) {
-          return const NoTransitionPage(
-            child: RecentPage(),
-          );
-        },
-      ),
-
-      // =========================================
-      // IMAGE TO TEXT
-      // =========================================
-      GoRoute(
-        path: '/image-to-text',
-        name: 'image-to-text',
-        builder: (
-          context,
-          state,
-        ) {
-          return const ImageToTextPage();
-        },
-      ),
-
-      // =========================================
-      // PROFILE
-      // =========================================
-      GoRoute(
-        path: '/profile',
-        name: 'profile',
-        builder: (
-          context,
-          state,
-        ) {
-          return const ProfilePage();
-        },
-      ),
-
-      // =========================================
-      // NOTIFICATIONS
-      // =========================================
-      GoRoute(
-        path: '/notifications',
-        name: 'notifications',
-        builder: (
-          context,
-          state,
-        ) {
-          return const NotificationsPage();
-        },
-      ),
-    ],
-  );
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
 }
 
-
-// =========================================================
+// ============================================================
 // MAIN NAVIGATION PAGE
-// =========================================================
+// ============================================================
 
 class MainNavigationPage extends StatelessWidget {
   final Widget child;
@@ -515,21 +84,18 @@ class MainNavigationPage extends StatelessWidget {
     required this.child,
   });
 
-  int _getCurrentIndex(
-    BuildContext context,
-  ) {
-    final location =
-        GoRouterState.of(context).uri.path;
+  int _getCurrentIndex(BuildContext context) {
+    final location = GoRouterState.of(context).uri.path;
 
-    if (location == '/documents') {
+    if (location.startsWith('/documents')) {
       return 1;
     }
 
-    if (location == '/favorites') {
+    if (location.startsWith('/favorites')) {
       return 2;
     }
 
-    if (location == '/settings') {
+    if (location.startsWith('/settings')) {
       return 3;
     }
 
@@ -560,163 +126,495 @@ class MainNavigationPage extends StatelessWidget {
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    final currentIndex =
-        _getCurrentIndex(context);
+  Widget build(BuildContext context) {
+    final currentIndex = _getCurrentIndex(context);
 
     return Scaffold(
       body: child,
-
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          18,
-          0,
-          18,
-          18,
-        ),
-        child: ClipRRect(
-          borderRadius:
-              BorderRadius.circular(24),
-
-          child: Container(
-            decoration: BoxDecoration(
-              color: colors.surface,
-
-              borderRadius:
-                  BorderRadius.circular(24),
-
-              boxShadow: [
-                BoxShadow(
-                  color:
-                      colors.onSurface.withValues(
-                    alpha: 0.10,
-                  ),
-                  blurRadius: 18,
-                  offset: const Offset(
-                    0,
-                    6,
-                  ),
-                ),
-              ],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: (index) {
+          _onItemTapped(
+            context,
+            index,
+          );
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(
+              Icons.home_outlined,
             ),
-
-            child: NavigationBar(
-              selectedIndex: currentIndex,
-
-              onDestinationSelected: (
-                index,
-              ) {
-                _onItemTapped(
-                  context,
-                  index,
-                );
-              },
-
-              backgroundColor:
-                  Colors.transparent,
-
-              surfaceTintColor:
-                  Colors.transparent,
-
-              shadowColor:
-                  Colors.transparent,
-
-              elevation: 0,
-
-              height: 68,
-
-              indicatorColor:
-                  colors.primary.withValues(
-                alpha: 0.14,
-              ),
-
-              labelBehavior:
-                  NavigationDestinationLabelBehavior
-                      .alwaysShow,
-
-              destinations: [
-
-                // =========================================
-                // HOME
-                // =========================================
-                NavigationDestination(
-                  icon: Icon(
-                    Icons.home_outlined,
-                    color:
-                        colors.onSurface.withValues(
-                      alpha: 0.55,
-                    ),
-                  ),
-                  selectedIcon: Icon(
-                    Icons.home_rounded,
-                    color: colors.primary,
-                  ),
-                  label: 'Home',
-                ),
-
-                // =========================================
-                // DOCUMENTS
-                // =========================================
-                NavigationDestination(
-                  icon: Icon(
-                    Icons.description_outlined,
-                    color:
-                        colors.onSurface.withValues(
-                      alpha: 0.55,
-                    ),
-                  ),
-                  selectedIcon: Icon(
-                    Icons.description_rounded,
-                    color: colors.primary,
-                  ),
-                  label: 'Documents',
-                ),
-
-                // =========================================
-                // FAVORITES
-                // =========================================
-                NavigationDestination(
-                  icon: Icon(
-                    Icons.star_border_rounded,
-                    color:
-                        colors.onSurface.withValues(
-                      alpha: 0.55,
-                    ),
-                  ),
-                  selectedIcon: Icon(
-                    Icons.star_rounded,
-                    color: colors.primary,
-                  ),
-                  label: 'Favorites',
-                ),
-
-                // =========================================
-                // SETTINGS
-                // =========================================
-                NavigationDestination(
-                  icon: Icon(
-                    Icons.settings_outlined,
-                    color:
-                        colors.onSurface.withValues(
-                      alpha: 0.55,
-                    ),
-                  ),
-                  selectedIcon: Icon(
-                    Icons.settings_rounded,
-                    color: colors.primary,
-                  ),
-                  label: 'Settings',
-                ),
-              ],
+            selectedIcon: Icon(
+              Icons.home,
             ),
+            label: 'Home',
           ),
-        ),
+          NavigationDestination(
+            icon: Icon(
+              Icons.folder_outlined,
+            ),
+            selectedIcon: Icon(
+              Icons.folder,
+            ),
+            label: 'Documents',
+          ),
+          NavigationDestination(
+            icon: Icon(
+              Icons.favorite_border,
+            ),
+            selectedIcon: Icon(
+              Icons.favorite,
+            ),
+            label: 'Favorites',
+          ),
+          NavigationDestination(
+            icon: Icon(
+              Icons.settings_outlined,
+            ),
+            selectedIcon: Icon(
+              Icons.settings,
+            ),
+            label: 'Settings',
+          ),
+        ],
       ),
     );
   }
+}
+
+// ============================================================
+// APP ROUTER
+// ============================================================
+
+class AppRouter {
+  static final GoRouter router = GoRouter(
+    // ========================================================
+    // STARTING POINT
+    // ========================================================
+
+    initialLocation: '/',
+
+    // ========================================================
+    // AUTH STATE LISTENER
+    // ========================================================
+
+    refreshListenable: GoRouterRefreshStream(
+      FirebaseAuth.instance.authStateChanges(),
+    ),
+
+    // ========================================================
+    // REDIRECT
+    // ========================================================
+
+    redirect: (context, state) {
+      final User? user =
+          FirebaseAuth.instance.currentUser;
+
+      final String location =
+          state.uri.path;
+
+      // ======================================================
+      // ROOT
+      // ======================================================
+
+      if (location == '/') {
+        if (user != null) {
+          return '/home';
+        }
+
+        return '/login';
+      }
+
+      // ======================================================
+      // AUTH PAGES
+      // ======================================================
+
+      final bool isLogin =
+          location == '/login';
+
+      final bool isRegister =
+          location == '/register';
+
+      final bool isVerification =
+          location == '/verification';
+
+      final bool isForgotPassword =
+          location ==
+              '/forgot-password-verification';
+
+      final bool isOnboarding =
+          location == '/onboarding';
+
+      final bool isAuthPage =
+          isLogin ||
+          isRegister ||
+          isVerification ||
+          isForgotPassword;
+
+      // ======================================================
+      // USER NOT LOGGED IN
+      // ======================================================
+
+      if (user == null) {
+        if (isAuthPage || isOnboarding) {
+          return null;
+        }
+
+        return '/login';
+      }
+
+      // ======================================================
+      // USER LOGGED IN
+      // ======================================================
+
+      // ------------------------------------------------------
+      // IMPORTANT:
+      //
+      // Do NOT redirect /verification here.
+      //
+      // LoginPage decides:
+      //
+      // Email + not verified
+      //       -> /verification
+      //
+      // Google/Facebook
+      //       -> /home
+      //
+      // ------------------------------------------------------
+
+      if (isLogin || isRegister) {
+        return '/home';
+      }
+
+      return null;
+    },
+
+    // ========================================================
+    // ROUTES
+    // ========================================================
+
+    routes: [
+
+      // ======================================================
+      // ROOT
+      // ======================================================
+
+      GoRoute(
+        path: '/',
+        builder: (context, state) {
+          return const SizedBox.shrink();
+        },
+      ),
+
+      // ======================================================
+      // LOGIN
+      // ======================================================
+
+      GoRoute(
+        path: '/login',
+        builder: (context, state) {
+          return const LoginPage();
+        },
+      ),
+
+      // ======================================================
+      // REGISTER
+      // ======================================================
+
+      GoRoute(
+        path: '/register',
+        builder: (context, state) {
+          return const RegisterPage();
+        },
+      ),
+
+      // ======================================================
+      // EMAIL VERIFICATION
+      // ======================================================
+
+      GoRoute(
+        path: '/verification',
+        builder: (context, state) {
+          return const VerificationPage();
+        },
+      ),
+
+      // ======================================================
+      // FORGOT PASSWORD
+      // ======================================================
+
+      GoRoute(
+        path: '/forgot-password-verification',
+        builder: (context, state) {
+          return const ForgotPasswordVerificationPage(
+            email: '',
+          );
+        },
+      ),
+
+      // ======================================================
+      // ONBOARDING
+      // ======================================================
+
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) {
+          return const OnboardingPage();
+        },
+      ),
+
+      // ======================================================
+      // MAIN APP
+      // ======================================================
+
+      ShellRoute(
+        builder: (
+          context,
+          state,
+          child,
+        ) {
+          return MainNavigationPage(
+            child: child,
+          );
+        },
+
+        routes: [
+
+          // ==================================================
+          // HOME
+          // ==================================================
+
+          GoRoute(
+            path: '/home',
+            builder: (context, state) {
+              return const HomePage();
+            },
+          ),
+
+          // ==================================================
+          // DOCUMENTS
+          // ==================================================
+
+          GoRoute(
+            path: '/documents',
+            builder: (context, state) {
+              return const DocumentsPage();
+            },
+          ),
+
+          // ==================================================
+          // FAVORITES
+          // ==================================================
+
+          GoRoute(
+            path: '/favorites',
+            builder: (context, state) {
+              return const FavoritesPage();
+            },
+          ),
+
+          // ==================================================
+          // SETTINGS
+          // ==================================================
+
+          GoRoute(
+            path: '/settings',
+            builder: (context, state) {
+              return const SettingsPage();
+            },
+          ),
+        ],
+      ),
+
+      // ======================================================
+      // PROFILE
+      // ======================================================
+
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) {
+          return const ProfilePage();
+        },
+      ),
+
+      // ======================================================
+      // NOTIFICATIONS
+      // ======================================================
+
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) {
+          return const NotificationsPage();
+        },
+      ),
+
+      // ======================================================
+      // ABOUT SCANLY
+      // ======================================================
+
+      GoRoute(
+        path: '/about',
+        builder: (context, state) {
+          return const AboutScanlyPage();
+        },
+      ),
+
+      // ======================================================
+      // PDF PREVIEW
+      // ======================================================
+
+      GoRoute(
+        path: '/pdf-preview',
+        builder: (context, state) {
+          final extra = state.extra;
+
+          if (extra is DocumentModel) {
+            return PDFPreviewPage(
+              document: extra,
+              pdfBytes: Uint8List(0),
+              fileName: '',
+            );
+          }
+
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Document not found',
+              ),
+            ),
+          );
+        },
+      ),
+
+      // ======================================================
+      // EDIT DOCUMENT
+      // ======================================================
+
+      GoRoute(
+        path: '/edit-document',
+        builder: (context, state) {
+          final extra = state.extra;
+
+          if (extra is DocumentModel) {
+            return EditDocumentPage(
+              document: extra,
+            );
+          }
+
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Document not found',
+              ),
+            ),
+          );
+        },
+      ),
+
+      // ======================================================
+      // DOCUMENT VIEWER
+      // ======================================================
+
+      GoRoute(
+        path: '/document-viewer',
+        builder: (context, state) {
+          final extra = state.extra;
+
+          if (extra is DocumentModel) {
+            return DocumentViewerPage(
+              document: extra,
+            );
+          }
+
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Document not found',
+              ),
+            ),
+          );
+        },
+      ),
+
+      // ======================================================
+      // NOTES
+      // ======================================================
+
+      GoRoute(
+        path: '/notes',
+        builder: (context, state) {
+          return const NotesPage();
+        },
+      ),
+
+      // ======================================================
+      // CREATE NOTE
+      // ======================================================
+
+      GoRoute(
+        path: '/create-note',
+        builder: (context, state) {
+          return const CreateNotePage();
+        },
+      ),
+
+      // ======================================================
+      // VIEW NOTE
+      // ======================================================
+
+      GoRoute(
+        path: '/view-note',
+        builder: (context, state) {
+          final extra = state.extra;
+
+          if (extra is NoteModel) {
+            return ViewNotePage(
+              note: extra,
+            );
+          }
+
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Note not found',
+              ),
+            ),
+          );
+        },
+      ),
+
+      // ======================================================
+      // QR TOOLS
+      // ======================================================
+
+      GoRoute(
+        path: '/qr-tools',
+        builder: (context, state) {
+          return const QRToolsPage();
+        },
+      ),
+
+      // ======================================================
+      // PDF & IMAGES
+      // ======================================================
+
+      GoRoute(
+        path: '/pdf-images',
+        builder: (context, state) {
+          return const PDFImagesPage();
+        },
+      ),
+
+      // ======================================================
+      // IMAGE TO TEXT
+      // ======================================================
+
+      GoRoute(
+        path: '/image-to-text',
+        builder: (context, state) {
+          return const ImageToTextPage();
+        },
+      ),
+    ],
+  );
 }
