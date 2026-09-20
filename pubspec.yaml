@@ -41,7 +41,8 @@ dependencies:
   share_plus: ^11.0.0
   path_provider: ^2.1.5
   url_launcher: ^6.3.2
-
+  flutter_launcher_icons: ^0.14.4
+  
   image_gallery_saver_plus: ^4.0.1
 
   pdf: ^3.11.3
@@ -73,7 +74,11 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/
+    - assets/images/Scanly_Icon.png
+    - assets/images/OnBoarding_1.png
+    - assets/images/OnBoarding_2.png
+    - assets/images/OnBoarding_3.png
+    - assets/images/Launch_Page.png
     - assets/tessdata/
     - assets/tessdata_config.json
 
@@ -96,14 +101,31 @@ flutter:
         - asset: assets/fonts/RobotoSlab-Bold.ttf
           weight: 700
 
-flutter_native_splash:
-  color: "#6750A4"
-  image: assets/images/Launch_Page.png
 
+
+
+flutter_native_splash:
+  color: "#000000"
+  image: assets/images/Scanly_Splash.png
   android: true
   ios: false
   fullscreen: true
 
   android_12:
-    color: "#6750A4"
-    image: assets/images/Launch_Page.png
+    color: "#000000"
+    image: assets/images/Scanly_Splash.png
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/Scanly_Icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/images/Scanly_Icon.png"
+
+
+
+
+
+
+

@@ -1,19 +1,20 @@
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
-import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart';
+
 import 'package:tesseract_ocr/ocr_engine_config.dart';
 
-
 class TesseractOcr {
-  static const String tessDataConfig =
+  static const String TESS_DATA_CONFIG =
       'assets/tessdata_config.json';
 
-  static const String tessDataPath =
+  static const String TESS_DATA_PATH =
       'assets/tessdata';
 
   static const MethodChannel _channel =
@@ -22,7 +23,7 @@ class TesseractOcr {
   static Future<String> extractText(
     String imagePath, {
     OCRConfig? config,
-    String language = 'eng',
+    required String language,
   }) async {
     final imageFile = File(imagePath);
 
@@ -38,36 +39,56 @@ class TesseractOcr {
           engine: OCREngine.tesseract,
         );
 
-    String? tessDataDirectory;
-
-    if (actualConfig.engine != OCREngine.vision) {
-      tessDataDirectory = await _loadTessData();
-    }
+    final tessDataPath =
+        await _loadTessData();
 
     final Map<String, dynamic> args = {
       'imagePath': imagePath,
-      'tessData': tessDataDirectory,
-      'language': actualConfig.language,
+
+      // Important:
+      // Android expects the parent directory
+      // containing "tessdata".
+      'tessData': tessDataPath,
+
+      // Use the language selected by the user.
+      'language': language,
+
+      'engine': actualConfig.engine
+          .toString()
+          .split('.')
+          .last,
     };
 
-    try {
-      final String? result =
-          await _channel.invokeMethod<String>(
-        'extractText',
-        args,
-      );
-
-      return result ?? '';
-    } on MissingPluginException {
-      throw Exception(
-        'Tesseract OCR plugin is not registered. '
-        'Please completely stop the app and run it again.',
-      );
-    } on PlatformException catch (e) {
-      throw Exception(
-        'Tesseract OCR error: ${e.message ?? e.code}',
+    if (actualConfig.options != null) {
+      args.addAll(
+        actualConfig.options!,
       );
     }
+
+    print(
+      'Tesseract OCR',
+    );
+
+    print(
+      'Image: $imagePath',
+    );
+
+    print(
+      'Language: $language',
+    );
+
+    print(
+      'TessData: $tessDataPath',
+    );
+
+    final String extractedText =
+        await _channel.invokeMethod<String>(
+          'extractText',
+          args,
+        ) ??
+        '';
+
+    return extractedText;
   }
 
   static Future<String> _loadTessData() async {
@@ -75,13 +96,16 @@ class TesseractOcr {
         await getApplicationDocumentsDirectory();
 
     final String tessdataDirectory =
-        join(appDirectory.path, 'tessdata');
+        join(
+      appDirectory.path,
+      'tessdata',
+    );
 
-    final Directory directory =
+    final Directory tessdata =
         Directory(tessdataDirectory);
 
-    if (!await directory.exists()) {
-      await directory.create(
+    if (!await tessdata.exists()) {
+      await tessdata.create(
         recursive: true,
       );
     }
@@ -99,50 +123,62 @@ class TesseractOcr {
   ) async {
     final String config =
         await rootBundle.loadString(
-      tessDataConfig,
+      TESS_DATA_CONFIG,
     );
 
     final Map<String, dynamic> files =
         jsonDecode(config);
 
     final List<dynamic> fileList =
-        files['files'] as List<dynamic>;
+        files['files'] ?? [];
 
     for (final dynamic item in fileList) {
-      final String fileName = item.toString();
-
-      final String assetPath =
-          join(
-        tessDataPath,
-        fileName,
-      );
+      final String file =
+          item.toString();
 
       final String destinationPath =
           join(
         tessdataDirectory,
-        fileName,
+        file,
       );
 
       final File destinationFile =
           File(destinationPath);
 
+      // Don't copy the file again if it
+      // already exists.
       if (await destinationFile.exists()) {
         continue;
       }
 
-      final ByteData data =
-          await rootBundle.load(assetPath);
-
-      final Uint8List bytes =
-          data.buffer.asUint8List(
-        data.offsetInBytes,
-        data.lengthInBytes,
+      final String assetPath =
+          join(
+        TESS_DATA_PATH,
+        file,
       );
 
-      await destinationFile.writeAsBytes(
-        bytes,
-        flush: true,
-      );
+      try {
+        final ByteData data =
+            await rootBundle.load(
+          assetPath,
+        );
+
+        final Uint8List bytes =
+            data.buffer.asUint8List(
+          data.offsetInBytes,
+          data.lengthInBytes,
+        );
+
+        await destinationFile.writeAsBytes(
+          bytes,
+          flush: true,
+        );
+      } catch (e) {
+        throw Exception(
+          'Failed to copy Tesseract file '
+          '"$file": $e',
+        );
+      }
     }
   }
 }
