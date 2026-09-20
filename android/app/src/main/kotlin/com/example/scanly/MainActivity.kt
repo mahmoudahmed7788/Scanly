@@ -10,20 +10,27 @@ import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.paratoner.tesseract_ocr.TesseractOcrPlugin
 import java.io.File
 
 class MainActivity : FlutterActivity() {
 
-    private val CHANNEL = "scanly/share"
+    private val SHARE_CHANNEL = "scanly/share"
 
     override fun configureFlutterEngine(
         flutterEngine: FlutterEngine
     ) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Register Tesseract OCR plugin
+        flutterEngine.plugins.add(
+            TesseractOcrPlugin()
+        )
+
+        // Scanly Share Channel
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            CHANNEL
+            SHARE_CHANNEL
         ).setMethodCallHandler { call, result ->
 
             when (call.method) {
@@ -361,4 +368,3 @@ class MainActivity : FlutterActivity() {
         }
     }
 }
-

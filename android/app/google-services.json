@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "431969184661-u77ooj132aesk6vskeb42p6lhkv27env.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.scanly",
+            "certificate_hash": "b18ae7677dc6f21d1251f3f6491a314d99c9f1cf"
+          }
+        },
+        {
           "client_id": "431969184661-jdsl5av6b1iplbhgga1jvdrfmh7dh143.apps.googleusercontent.com",
           "client_type": 3
         }
