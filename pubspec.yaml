@@ -29,7 +29,6 @@ dependencies:
 
   image_picker: ^1.1.2
   file_picker: ^10.3.3
-
   flutter_quill: ^11.5.0
 
   shared_preferences: ^2.5.3
@@ -42,7 +41,7 @@ dependencies:
   path_provider: ^2.1.5
   url_launcher: ^6.3.2
   flutter_launcher_icons: ^0.14.4
-  
+
   image_gallery_saver_plus: ^4.0.1
 
   pdf: ^3.11.3
@@ -55,11 +54,9 @@ dependencies:
     path: ./tesseract_ocr
 
   flutter_tts: ^4.2.5
-
   flutter_local_notifications: ^19.5.0
 
   image: ^4.9.2
-
   supabase_flutter: ^2.10.2
 
 dev_dependencies:
@@ -68,13 +65,14 @@ dev_dependencies:
 
   flutter_lints: ^6.0.0
 
-  flutter_native_splash: ^2.4.6
+  flutter_native_splash: ^2.4.8
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/images/Scanly_Icon.png
+    - assets/images/Scanly_Splash.png
     - assets/images/OnBoarding_1.png
     - assets/images/OnBoarding_2.png
     - assets/images/OnBoarding_3.png
@@ -101,12 +99,11 @@ flutter:
         - asset: assets/fonts/RobotoSlab-Bold.ttf
           weight: 700
 
-
-
-
 flutter_native_splash:
   color: "#000000"
+
   image: assets/images/Scanly_Splash.png
+
   android: true
   ios: false
   fullscreen: true
@@ -114,6 +111,7 @@ flutter_native_splash:
   android_12:
     color: "#000000"
     image: assets/images/Scanly_Splash.png
+    icon_background_color: "#000000"
 
 flutter_launcher_icons:
   android: true
@@ -122,10 +120,3 @@ flutter_launcher_icons:
   min_sdk_android: 21
   adaptive_icon_background: "#000000"
   adaptive_icon_foreground: "assets/images/Scanly_Icon.png"
-
-
-
-
-
-
-
