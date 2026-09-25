@@ -33,8 +33,7 @@ class QRGeneratorPage extends StatefulWidget {
       _QRGeneratorPageState();
 }
 
-class _QRGeneratorPageState
-    extends State<QRGeneratorPage> {
+class _QRGeneratorPageState extends State<QRGeneratorPage> {
   final TextEditingController _textController =
       TextEditingController();
 
@@ -56,17 +55,41 @@ class _QRGeneratorPageState
   bool _isSharing = false;
 
   @override
+  void initState() {
+    super.initState();
+
+    ScanlyActivityService.version.addListener(
+      _onActivityChanged,
+    );
+  }
+
+  @override
   void dispose() {
+    ScanlyActivityService.version.removeListener(
+      _onActivityChanged,
+    );
+
     _textController.dispose();
+
     super.dispose();
   }
+
+  void _onActivityChanged() {
+    if (!mounted) return;
+
+    setState(() {});
+  }
+
+  // ============================================================
+  // QR ITEM
+  // ============================================================
 
   String _itemId(String value) {
     return QRGeneratorUtils.itemId(value);
   }
 
   ScanlyItem _createScanlyItem(String value) {
-    final type = switch (_selectedType) {
+    final String type = switch (_selectedType) {
       QRType.text => 'text',
       QRType.image => 'image',
       QRType.video => 'video',
@@ -87,16 +110,28 @@ class _QRGeneratorPageState
     );
   }
 
+  // ============================================================
+  // REGISTER RECENT
+  // ============================================================
+
   Future<void> _registerGeneratedQR(
     String value,
   ) async {
-    final item = _createScanlyItem(value);
+    final ScanlyItem item =
+        _createScanlyItem(value);
 
-    await ScanlyActivityService.addRecent(item);
+    await ScanlyActivityService.addRecent(
+      item,
+    );
   }
 
+  // ============================================================
+  // TEXT QR
+  // ============================================================
+
   Future<void> _generateTextQR() async {
-    final value = _textController.text.trim();
+    final String value =
+        _textController.text.trim();
 
     if (value.isEmpty) {
       _showMessage(
@@ -108,12 +143,17 @@ class _QRGeneratorPageState
     setState(() {
       _qrData = value;
       _selectedFile = null;
+      _selectedType = QRType.text;
     });
 
     widget.onGenerated(value);
 
     await _registerGeneratedQR(value);
   }
+
+  // ============================================================
+  // IMAGE QR
+  // ============================================================
 
   Future<void> _pickImage() async {
     try {
@@ -124,9 +164,10 @@ class _QRGeneratorPageState
 
       if (image == null) return;
 
-      final file = File(image.path);
+      final File file =
+          File(image.path);
 
-      final qrValue =
+      final String qrValue =
           QRGeneratorUtils.buildFileQRValue(
         type: 'image',
         path: image.path,
@@ -148,6 +189,10 @@ class _QRGeneratorPageState
     }
   }
 
+  // ============================================================
+  // VIDEO QR
+  // ============================================================
+
   Future<void> _pickVideo() async {
     try {
       final XFile? video =
@@ -157,9 +202,10 @@ class _QRGeneratorPageState
 
       if (video == null) return;
 
-      final file = File(video.path);
+      final File file =
+          File(video.path);
 
-      final qrValue =
+      final String qrValue =
           QRGeneratorUtils.buildFileQRValue(
         type: 'video',
         path: video.path,
@@ -181,12 +227,17 @@ class _QRGeneratorPageState
     }
   }
 
+  // ============================================================
+  // CREATE QR IMAGE
+  // ============================================================
+
   Future<String?> _createQRImage() async {
     try {
       await WidgetsBinding.instance.endOfFrame;
 
-      final boundary =
-          _qrKey.currentContext?.findRenderObject()
+      final RenderRepaintBoundary? boundary =
+          _qrKey.currentContext
+                  ?.findRenderObject()
               as RenderRepaintBoundary?;
 
       if (boundary == null) {
@@ -212,10 +263,11 @@ class _QRGeneratorPageState
       final Uint8List pngBytes =
           byteData.buffer.asUint8List();
 
-      final directory =
+      final Directory directory =
           await getApplicationDocumentsDirectory();
 
-      final qrDirectory = Directory(
+      final Directory qrDirectory =
+          Directory(
         '${directory.path}/Scanly/QR',
       );
 
@@ -225,7 +277,7 @@ class _QRGeneratorPageState
         );
       }
 
-      final file = File(
+      final File file = File(
         '${qrDirectory.path}/scanly_qr_${DateTime.now().millisecondsSinceEpoch}.png',
       );
 
@@ -246,6 +298,10 @@ class _QRGeneratorPageState
     }
   }
 
+  // ============================================================
+  // SAVE QR
+  // ============================================================
+
   Future<void> _saveQR() async {
     if (_qrData.isEmpty) {
       _showMessage(
@@ -261,14 +317,15 @@ class _QRGeneratorPageState
     });
 
     try {
-      final imagePath =
+      final String? imagePath =
           await _createQRImage();
 
       if (imagePath == null) {
         return;
       }
 
-      final file = File(imagePath);
+      final File file =
+          File(imagePath);
 
       if (!await file.exists()) {
         _showMessage(
@@ -277,10 +334,10 @@ class _QRGeneratorPageState
         return;
       }
 
-      final fileName =
+      final String fileName =
           'Scanly_QR_${DateTime.now().millisecondsSinceEpoch}.png';
 
-      final savedUri =
+      final String? savedUri =
           await _shareChannel.invokeMethod<String>(
         'saveQrToGallery',
         {
@@ -305,7 +362,8 @@ class _QRGeneratorPageState
       if (!mounted) return;
 
       _showMessage(
-        e.message ?? 'Failed to save QR Code.',
+        e.message ??
+            'Failed to save QR Code.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -322,67 +380,21 @@ class _QRGeneratorPageState
     }
   }
 
+  // ============================================================
+  // SHARE
+  // ============================================================
+
   Future<void> _shareTo(
     List<String> packageNames,
   ) async {
-    if (_qrData.isEmpty) {
-      _showMessage(
-        'Generate a QR Code first.',
-      );
-      return;
-    }
-
-    if (_isSharing) return;
-
-    setState(() {
-      _isSharing = true;
-    });
-
-    try {
-      final imagePath =
-          await _createQRImage();
-
-      if (imagePath == null) {
-        return;
-      }
-
-      final file = File(imagePath);
-
-      if (!await file.exists()) {
-        _showMessage(
-          'QR image file was not created.',
-        );
-        return;
-      }
-
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [
-            XFile(
-              imagePath,
-              mimeType: 'image/png',
-            ),
-          ],
-          text: _qrData,
-          subject: 'Scanly QR Code',
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-
-      _showMessage(
-        'Failed to share QR Code.',
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSharing = false;
-        });
-      }
-    }
+    await _shareQR();
   }
 
   Future<void> _shareMore() async {
+    await _shareQR();
+  }
+
+  Future<void> _shareQR() async {
     if (_qrData.isEmpty) {
       _showMessage(
         'Generate a QR Code first.',
@@ -397,14 +409,15 @@ class _QRGeneratorPageState
     });
 
     try {
-      final imagePath =
+      final String? imagePath =
           await _createQRImage();
 
       if (imagePath == null) {
         return;
       }
 
-      final file = File(imagePath);
+      final File file =
+          File(imagePath);
 
       if (!await file.exists()) {
         _showMessage(
@@ -439,6 +452,10 @@ class _QRGeneratorPageState
       }
     }
   }
+
+  // ============================================================
+  // SHARE SHEET
+  // ============================================================
 
   void _showShareSheet() {
     if (_qrData.isEmpty) {
@@ -455,6 +472,10 @@ class _QRGeneratorPageState
     );
   }
 
+  // ============================================================
+  // FAVORITE
+  // ============================================================
+
   Future<void> _toggleFavorite() async {
     if (_qrData.isEmpty) {
       _showMessage(
@@ -463,44 +484,59 @@ class _QRGeneratorPageState
       return;
     }
 
-    final item =
+    final ScanlyItem item =
         _createScanlyItem(_qrData);
 
-    final currentlyFavorite =
+    final bool currentlyFavorite =
         ScanlyActivityService.isFavorite(
       item.id,
     );
 
-    if (currentlyFavorite) {
-      await ScanlyActivityService.removeFavorite(
-        item.id,
+    try {
+      if (currentlyFavorite) {
+        await ScanlyActivityService
+            .removeFavorite(
+          item.id,
+        );
+
+        if (mounted) {
+          _showMessage(
+            'Removed from Favorites.',
+          );
+        }
+      } else {
+        await ScanlyActivityService
+            .addFavorite(
+          item,
+        );
+
+        if (mounted) {
+          _showMessage(
+            'Added to Favorites.',
+          );
+        }
+      }
+
+      // Keep parent QR page state synchronized.
+      widget.onToggleFavorite(
+        _qrData,
       );
 
-      widget.onToggleFavorite(_qrData);
-
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (_) {
       if (mounted) {
         _showMessage(
-          'Removed from Favorites.',
+          'Failed to update Favorites.',
         );
       }
-    } else {
-      await ScanlyActivityService.addFavorite(
-        item,
-      );
-
-      widget.onToggleFavorite(_qrData);
-
-      if (mounted) {
-        _showMessage(
-          'Added to Favorites.',
-        );
-      }
-    }
-
-    if (mounted) {
-      setState(() {});
     }
   }
+
+  // ============================================================
+  // CREATE ANOTHER
+  // ============================================================
 
   void _createAnother() {
     setState(() {
@@ -511,7 +547,13 @@ class _QRGeneratorPageState
     });
   }
 
-  void _showMessage(String message) {
+  // ============================================================
+  // MESSAGE
+  // ============================================================
+
+  void _showMessage(
+    String message,
+  ) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context)
@@ -519,8 +561,10 @@ class _QRGeneratorPageState
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
+          behavior:
+              SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(
             borderRadius:
                 BorderRadius.circular(14),
           ),
@@ -528,10 +572,19 @@ class _QRGeneratorPageState
       );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
-  Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).colorScheme;
+  Widget build(
+    BuildContext context,
+  ) {
+    final ThemeData theme =
+        Theme.of(context);
+
+    final ColorScheme colors =
+        theme.colorScheme;
 
     final bool hasQR =
         _qrData.isNotEmpty;
@@ -551,9 +604,11 @@ class _QRGeneratorPageState
           ),
         ),
       ),
+
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
+          padding:
+              const EdgeInsets.fromLTRB(
             20,
             10,
             20,
@@ -565,28 +620,36 @@ class _QRGeneratorPageState
             children: [
               Text(
                 'Create your QR Code',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium,
+                style:
+                    theme.textTheme
+                        .headlineMedium,
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(
+                height: 8,
+              ),
 
               Text(
                 'Generate a QR Code from text, images, or videos.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium,
+                style:
+                    theme.textTheme
+                        .bodyMedium,
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(
+                height: 24,
+              ),
+
+              // ==================================================
+              // QR TYPE BUTTONS
+              // ==================================================
 
               Row(
                 children: [
                   Expanded(
                     child: QRTypeButton(
-                      icon:
-                          Icons.text_fields_rounded,
+                      icon: Icons
+                          .text_fields_rounded,
                       label: 'Text',
                       selected:
                           _selectedType ==
@@ -602,7 +665,9 @@ class _QRGeneratorPageState
                     ),
                   ),
 
-                  const SizedBox(width: 10),
+                  const SizedBox(
+                    width: 10,
+                  ),
 
                   Expanded(
                     child: QRTypeButton(
@@ -624,7 +689,9 @@ class _QRGeneratorPageState
                     ),
                   ),
 
-                  const SizedBox(width: 10),
+                  const SizedBox(
+                    width: 10,
+                  ),
 
                   Expanded(
                     child: QRTypeButton(
@@ -648,7 +715,13 @@ class _QRGeneratorPageState
                 ],
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(
+                height: 20,
+              ),
+
+              // ==================================================
+              // TEXT INPUT
+              // ==================================================
 
               if (_selectedType ==
                   QRType.text) ...[
@@ -663,7 +736,8 @@ class _QRGeneratorPageState
                       const InputDecoration(
                     hintText:
                         'Enter text, URL, phone number...',
-                    prefixIcon: Padding(
+                    prefixIcon:
+                        Padding(
                       padding:
                           EdgeInsets.only(
                         top: 14,
@@ -677,7 +751,9 @@ class _QRGeneratorPageState
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(
+                  height: 16,
+                ),
 
                 SizedBox(
                   height: 56,
@@ -686,7 +762,8 @@ class _QRGeneratorPageState
                     onPressed:
                         _generateTextQR,
                     icon: const Icon(
-                      Icons.qr_code_2_rounded,
+                      Icons
+                          .qr_code_2_rounded,
                     ),
                     label: const Text(
                       'Generate QR Code',
@@ -700,30 +777,50 @@ class _QRGeneratorPageState
                 ),
               ],
 
+              // ==================================================
+              // IMAGE PICKER
+              // ==================================================
+
               if (_selectedType ==
                       QRType.image &&
                   _qrData.isEmpty)
                 QRFilePickerCard(
-                  icon: Icons.image_rounded,
-                  title: 'Select an Image',
+                  icon:
+                      Icons.image_rounded,
+                  title:
+                      'Select an Image',
                   subtitle:
                       'Choose an image from your gallery',
-                  onTap: _pickImage,
+                  onTap:
+                      _pickImage,
                 ),
+
+              // ==================================================
+              // VIDEO PICKER
+              // ==================================================
 
               if (_selectedType ==
                       QRType.video &&
                   _qrData.isEmpty)
                 QRFilePickerCard(
                   icon:
-                      Icons.video_library_rounded,
-                  title: 'Select a Video',
+                      Icons
+                          .video_library_rounded,
+                  title:
+                      'Select a Video',
                   subtitle:
                       'Choose a video from your gallery',
-                  onTap: _pickVideo,
+                  onTap:
+                      _pickVideo,
                 ),
 
-              const SizedBox(height: 24),
+              const SizedBox(
+                height: 24,
+              ),
+
+              // ==================================================
+              // QR PREVIEW
+              // ==================================================
 
               if (hasQR)
                 QRCodePreview(
@@ -735,10 +832,14 @@ class _QRGeneratorPageState
                     filePath:
                         _selectedFile?.path,
                   ),
-                  isSaving: _isSaving,
-                  isSharing: _isSharing,
-                  isFavorite: favorite,
-                  qrKey: _qrKey,
+                  isSaving:
+                      _isSaving,
+                  isSharing:
+                      _isSharing,
+                  isFavorite:
+                      favorite,
+                  qrKey:
+                      _qrKey,
                   onCopy: () {
                     Clipboard.setData(
                       ClipboardData(
@@ -750,8 +851,10 @@ class _QRGeneratorPageState
                       'QR value copied.',
                     );
                   },
-                  onSave: _saveQR,
-                  onShare: _showShareSheet,
+                  onSave:
+                      _saveQR,
+                  onShare:
+                      _showShareSheet,
                   onToggleFavorite:
                       _toggleFavorite,
                   onCreateAnother:
@@ -765,9 +868,128 @@ class _QRGeneratorPageState
   }
 }
 
-extension on _QRGeneratorPageState {
-  QRFilePickerCard({required IconData icon, required String title, required String subtitle, required Future<void> Function() onTap}) {}
+// ================================================================
+// QR FILE PICKER CARD
+// ================================================================
+
+class QRFilePickerCard
+    extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Future<void> Function() onTap;
+
+  const QRFilePickerCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    final ColorScheme colors =
+        Theme.of(context).colorScheme;
+
+    return Material(
+      color:
+          colors.surfaceContainerHighest,
+      borderRadius:
+          BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius:
+            BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding:
+              const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration:
+                    BoxDecoration(
+                  color:
+                      colors.primary
+                          .withValues(
+                    alpha: 0.10,
+                  ),
+                  borderRadius:
+                      BorderRadius.circular(
+                    16,
+                  ),
+                ),
+                child: Icon(
+                  icon,
+                  color:
+                      colors.primary,
+                  size: 30,
+                ),
+              ),
+
+              const SizedBox(
+                width: 16,
+              ),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment
+                          .start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color:
+                            colors.onSurface,
+                        fontSize: 16,
+                        fontWeight:
+                            FontWeight.w800,
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 5,
+                    ),
+
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: colors
+                            .onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(
+                width: 8,
+              ),
+
+              Icon(
+                Icons
+                    .arrow_forward_ios_rounded,
+                size: 18,
+                color: colors
+                    .onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
+
+// ================================================================
+// QR TYPE
+// ================================================================
 
 enum QRType {
   text,

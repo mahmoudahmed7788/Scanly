@@ -3,9 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:scanly/Core/Scanly_Items.dart';
 import 'package:scanly/core/ScanlyActivityService.dart';
 
-
 class RecentPage extends StatefulWidget {
-  const RecentPage({super.key});
+  const RecentPage({
+    super.key,
+  });
 
   @override
   State<RecentPage> createState() =>
@@ -38,7 +39,9 @@ class _RecentPageState
     }
   }
 
-  IconData _iconForType(String type) {
+  IconData _iconForType(
+    String type,
+  ) {
     switch (type) {
       case 'qr':
         return Icons.qr_code_rounded;
@@ -67,10 +70,12 @@ class _RecentPageState
       item,
     );
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     if (item.route.isNotEmpty) {
-      context.push(
+      await context.push(
         item.route,
         extra: item.data,
       );
@@ -78,7 +83,9 @@ class _RecentPageState
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final colors =
         Theme.of(context).colorScheme;
 
@@ -124,7 +131,10 @@ class _RecentPageState
               itemCount: recent.length,
               separatorBuilder: (_, __) =>
                   const SizedBox(height: 10),
-              itemBuilder: (context, index) {
+              itemBuilder: (
+                context,
+                index,
+              ) {
                 final item = recent[index];
 
                 return _buildItemCard(
@@ -173,7 +183,8 @@ class _RecentPageState
             .removeRecent(item.id);
       },
       child: Material(
-        color: colors.surfaceContainerHighest,
+        color:
+            colors.surfaceContainerHighest,
         borderRadius:
             BorderRadius.circular(18),
         child: InkWell(
@@ -244,7 +255,8 @@ class _RecentPageState
                   icon: Icon(
                     isFavorite
                         ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
+                        : Icons
+                            .favorite_border_rounded,
                     color: isFavorite
                         ? colors.primary
                         : colors.onSurface
@@ -272,7 +284,8 @@ class _RecentPageState
         padding:
             const EdgeInsets.all(30),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
             Container(
               width: 90,
@@ -294,7 +307,8 @@ class _RecentPageState
               style: TextStyle(
                 color: colors.onSurface,
                 fontSize: 21,
-                fontWeight: FontWeight.bold,
+                fontWeight:
+                    FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),

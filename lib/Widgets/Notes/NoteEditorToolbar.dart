@@ -3,6 +3,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 class NoteEditorToolbar extends StatelessWidget {
   final QuillController controller;
+
   final bool Function(String key) hasAttribute;
 
   final VoidCallback onFontFamily;
@@ -13,7 +14,9 @@ class NoteEditorToolbar extends StatelessWidget {
   final void Function(Attribute attribute) onAttribute;
   final void Function(String key, String value) onValueAttribute;
 
-  final VoidCallback onRefresh;
+  final VoidCallback onUndo;
+  final VoidCallback onRedo;
+  final VoidCallback onClearFormatting;
 
   const NoteEditorToolbar({
     super.key,
@@ -25,7 +28,9 @@ class NoteEditorToolbar extends StatelessWidget {
     required this.onBackgroundColor,
     required this.onAttribute,
     required this.onValueAttribute,
-    required this.onRefresh, required void Function(Attribute<dynamic> attribute) onApplyAttribute, required void Function(String key, String value) onApplyValueAttribute, required VoidCallback onUndo, required VoidCallback onRedo, required VoidCallback onClearFormatting,
+    required this.onUndo,
+    required this.onRedo,
+    required this.onClearFormatting,
   });
 
   Widget _button({
@@ -44,11 +49,15 @@ class NoteEditorToolbar extends StatelessWidget {
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: selected
-              ? theme.colorScheme.primary.withValues(alpha: 0.16)
+              ? theme.colorScheme.primary.withValues(
+                  alpha: 0.16,
+                )
               : Colors.transparent,
           foregroundColor: selected
               ? theme.colorScheme.primary
-              : theme.colorScheme.onSurface.withValues(alpha: 0.78),
+              : theme.colorScheme.onSurface.withValues(
+                  alpha: 0.78,
+                ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
@@ -65,9 +74,15 @@ class NoteEditorToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+      ),
       child: Row(
         children: [
+          // =====================================================
+          // FONT
+          // =====================================================
+
           _button(
             context: context,
             icon: Icons.font_download_outlined,
@@ -82,13 +97,21 @@ class NoteEditorToolbar extends StatelessWidget {
             onPressed: onFontSize,
           ),
 
+          // =====================================================
+          // TEXT STYLE
+          // =====================================================
+
           _button(
             context: context,
             icon: Icons.format_bold,
             tooltip: 'Bold',
-            selected: hasAttribute(Attribute.bold.key),
+            selected: hasAttribute(
+              Attribute.bold.key,
+            ),
             onPressed: () {
-              onAttribute(Attribute.bold);
+              onAttribute(
+                Attribute.bold,
+              );
             },
           ),
 
@@ -96,9 +119,13 @@ class NoteEditorToolbar extends StatelessWidget {
             context: context,
             icon: Icons.format_italic,
             tooltip: 'Italic',
-            selected: hasAttribute(Attribute.italic.key),
+            selected: hasAttribute(
+              Attribute.italic.key,
+            ),
             onPressed: () {
-              onAttribute(Attribute.italic);
+              onAttribute(
+                Attribute.italic,
+              );
             },
           ),
 
@@ -106,9 +133,13 @@ class NoteEditorToolbar extends StatelessWidget {
             context: context,
             icon: Icons.format_underlined,
             tooltip: 'Underline',
-            selected: hasAttribute(Attribute.underline.key),
+            selected: hasAttribute(
+              Attribute.underline.key,
+            ),
             onPressed: () {
-              onAttribute(Attribute.underline);
+              onAttribute(
+                Attribute.underline,
+              );
             },
           ),
 
@@ -120,9 +151,15 @@ class NoteEditorToolbar extends StatelessWidget {
               Attribute.strikeThrough.key,
             ),
             onPressed: () {
-              onAttribute(Attribute.strikeThrough);
+              onAttribute(
+                Attribute.strikeThrough,
+              );
             },
           ),
+
+          // =====================================================
+          // COLORS
+          // =====================================================
 
           _button(
             context: context,
@@ -138,12 +175,21 @@ class NoteEditorToolbar extends StatelessWidget {
             onPressed: onBackgroundColor,
           ),
 
+          // =====================================================
+          // LISTS
+          // =====================================================
+
           _button(
             context: context,
             icon: Icons.format_list_numbered,
             tooltip: 'Numbered List',
+            selected: hasAttribute(
+              Attribute.ol.key,
+            ),
             onPressed: () {
-              onAttribute(Attribute.ol);
+              onAttribute(
+                Attribute.ol,
+              );
             },
           ),
 
@@ -151,15 +197,27 @@ class NoteEditorToolbar extends StatelessWidget {
             context: context,
             icon: Icons.format_list_bulleted,
             tooltip: 'Bullet List',
+            selected: hasAttribute(
+              Attribute.ul.key,
+            ),
             onPressed: () {
-              onAttribute(Attribute.ul);
+              onAttribute(
+                Attribute.ul,
+              );
             },
           ),
+
+          // =====================================================
+          // ALIGNMENT
+          // =====================================================
 
           _button(
             context: context,
             icon: Icons.format_align_left,
             tooltip: 'Align Left',
+            selected: _isAlignment(
+              'left',
+            ),
             onPressed: () {
               onValueAttribute(
                 Attribute.align.key,
@@ -172,6 +230,9 @@ class NoteEditorToolbar extends StatelessWidget {
             context: context,
             icon: Icons.format_align_center,
             tooltip: 'Align Center',
+            selected: _isAlignment(
+              'center',
+            ),
             onPressed: () {
               onValueAttribute(
                 Attribute.align.key,
@@ -184,6 +245,9 @@ class NoteEditorToolbar extends StatelessWidget {
             context: context,
             icon: Icons.format_align_right,
             tooltip: 'Align Right',
+            selected: _isAlignment(
+              'right',
+            ),
             onPressed: () {
               onValueAttribute(
                 Attribute.align.key,
@@ -192,12 +256,21 @@ class NoteEditorToolbar extends StatelessWidget {
             },
           ),
 
+          // =====================================================
+          // BLOCK
+          // =====================================================
+
           _button(
             context: context,
             icon: Icons.format_indent_increase,
             tooltip: 'Indent',
+            selected: hasAttribute(
+              Attribute.indentL1.key,
+            ),
             onPressed: () {
-              onAttribute(Attribute.indentL1);
+              onAttribute(
+                Attribute.indentL1,
+              );
             },
           ),
 
@@ -205,42 +278,60 @@ class NoteEditorToolbar extends StatelessWidget {
             context: context,
             icon: Icons.format_quote,
             tooltip: 'Quote',
+            selected: hasAttribute(
+              Attribute.blockQuote.key,
+            ),
             onPressed: () {
-              onAttribute(Attribute.blockQuote);
+              onAttribute(
+                Attribute.blockQuote,
+              );
             },
           ),
+
+          // =====================================================
+          // UNDO / REDO
+          // =====================================================
 
           _button(
             context: context,
             icon: Icons.undo,
             tooltip: 'Undo',
-            onPressed: () {
-              controller.undo();
-              onRefresh();
-            },
+            onPressed: onUndo,
           ),
 
           _button(
             context: context,
             icon: Icons.redo,
             tooltip: 'Redo',
-            onPressed: () {
-              controller.redo();
-              onRefresh();
-            },
+            onPressed: onRedo,
           ),
+
+          // =====================================================
+          // CLEAR
+          // =====================================================
 
           _button(
             context: context,
             icon: Icons.format_clear,
             tooltip: 'Clear Formatting',
-            onPressed: () {
-              controller.formatSelection(null);
-              onRefresh();
-            },
+            onPressed: onClearFormatting,
           ),
         ],
       ),
     );
+  }
+
+  bool _isAlignment(String value) {
+    final attributes =
+        controller.getSelectionStyle().attributes;
+
+    final attribute =
+        attributes[Attribute.align.key];
+
+    if (attribute == null) {
+      return value == 'left';
+    }
+
+    return attribute.value?.toString() == value;
   }
 }

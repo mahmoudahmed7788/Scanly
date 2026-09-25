@@ -16,7 +16,8 @@ class NoteEditor extends StatelessWidget {
   final VoidCallback onBackgroundColor;
 
   final void Function(Attribute attribute) onApplyAttribute;
-  final void Function(String key, String value) onApplyValueAttribute;
+  final void Function(String key, String value)
+      onApplyValueAttribute;
 
   final bool Function(String key) hasAttribute;
 
@@ -47,19 +48,29 @@ class NoteEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final height = isLandscape ? 360.0 : 520.0;
+    final height =
+        isLandscape ? 360.0 : 520.0;
 
     return Container(
       width: double.infinity,
       height: height,
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.25)),
+        borderRadius:
+            BorderRadius.circular(22),
+        border: Border.all(
+          color: theme.dividerColor.withValues(
+            alpha: 0.25,
+          ),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(
-              alpha: theme.brightness == Brightness.dark ? 0.22 : 0.06,
+              alpha:
+                  theme.brightness ==
+                          Brightness.dark
+                      ? 0.22
+                      : 0.06,
             ),
             blurRadius: 20,
             offset: const Offset(0, 8),
@@ -68,51 +79,86 @@ class NoteEditor extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // =====================================================
+          // TOOLBAR
+          // =====================================================
+
           Container(
             height: 58,
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(
+              color: theme
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(
                 alpha: 0.42,
               ),
-              borderRadius: const BorderRadius.vertical(
+              borderRadius:
+                  const BorderRadius.vertical(
                 top: Radius.circular(22),
               ),
             ),
             child: NoteEditorToolbar(
               controller: controller,
+              hasAttribute: hasAttribute,
               onFontFamily: onFontFamily,
               onFontSize: onFontSize,
               onTextColor: onTextColor,
-              onBackgroundColor: onBackgroundColor,
-              onApplyAttribute: onApplyAttribute,
-              onApplyValueAttribute: onApplyValueAttribute,
-              hasAttribute: hasAttribute,
+              onBackgroundColor:
+                  onBackgroundColor,
+              onAttribute:
+                  onApplyAttribute,
+              onValueAttribute:
+                  onApplyValueAttribute,
               onUndo: onUndo,
               onRedo: onRedo,
-              onClearFormatting: onClearFormatting, onAttribute: (Attribute<dynamic> attribute) {  }, onValueAttribute: (String key, String value) {  }, onRefresh: () {  },
+              onClearFormatting:
+                  onClearFormatting,
             ),
           ),
 
-          Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.25)),
+          Divider(
+            height: 1,
+            color:
+                theme.dividerColor.withValues(
+              alpha: 0.25,
+            ),
+          ),
+
+          // =====================================================
+          // EDITOR
+          // =====================================================
 
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+              padding:
+                  const EdgeInsets.fromLTRB(
+                20,
+                18,
+                20,
+                18,
+              ),
               child: Transform.scale(
                 scale: zoom,
-                alignment: Alignment.topLeft,
-                child: QuillEditor.basic(
+                alignment:
+                    Alignment.topLeft,
+                child:
+                    QuillEditor.basic(
                   controller: controller,
                   focusNode: focusNode,
-                  scrollController: scrollController,
-                  config: const QuillEditorConfig(
-                    placeholder: 'Start writing...',
-                    padding: EdgeInsets.zero,
+                  scrollController:
+                      scrollController,
+                  config:
+                      const QuillEditorConfig(
+                    placeholder:
+                        'Start writing...',
+                    padding:
+                        EdgeInsets.zero,
                     autoFocus: false,
                     expands: true,
                     scrollable: true,
                     showCursor: true,
-                    enableInteractiveSelection: true,
+                    enableInteractiveSelection:
+                        true,
                   ),
                 ),
               ),

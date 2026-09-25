@@ -2,32 +2,42 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import 'package:scanly/Models/DocumentModel.dart';
 import 'package:scanly/Models/Note_Model.dart';
+
 import 'package:scanly/Pages/Auth/ForgotPasswordVerficationPage.dart';
 import 'package:scanly/Pages/Auth/Login_Page.dart';
 import 'package:scanly/Pages/Auth/OnBourding_Page.dart';
 import 'package:scanly/Pages/Auth/Register_page.dart';
 import 'package:scanly/Pages/Auth/Verfication_Page.dart';
+
 import 'package:scanly/Pages/Documents/DocumentsPage.dart';
 import 'package:scanly/Pages/Documents/EditDocumentPage.dart';
-import 'package:scanly/Pages/Documents/FavouritesPage.dart';
+import 'package:scanly/Pages/Home/FavouritesPage.dart';
+
 import 'package:scanly/Pages/Home/Home_Page.dart';
 import 'package:scanly/Pages/Home/NotificationPage.dart';
 import 'package:scanly/Pages/Home/ProfilePage.dart';
 import 'package:scanly/Pages/Home/Recent_Page.dart';
 import 'package:scanly/Pages/Home/SettingsPage.dart';
+
 import 'package:scanly/Pages/Notes/Notes_Page.dart';
 import 'package:scanly/Pages/Notes/create_note_page.dart';
 import 'package:scanly/Pages/Notes/view_note_page.dart';
+
 import 'package:scanly/Pages/Pdf/PDFPreviewPage.dart';
+
 import 'package:scanly/Pages/QR/QR_Tools_Page.dart';
+
 import 'package:scanly/Pages/Text/ImageToTextPage.dart';
+
+import 'package:scanly/Pages/Trash/TrashPage.dart';
+
 import 'package:scanly/Widgets/Documents/DocumentViewerPage.dart';
 import 'package:scanly/Widgets/Home/MainNavigationBar.dart';
-import 'package:scanly/Widgets/Pdf/PDFImagesPage.dart';
+import 'package:scanly/Pages/Pdf/PDFImagesPage.dart';
 import 'package:scanly/Widgets/Settings/AboutScanlyPage.dart';
-
 
 // ============================================================
 // APP ROUTES
@@ -218,6 +228,17 @@ class AppRoutes {
           path: '/favorites',
           builder: (context, state) {
             return const FavoritesPage();
+          },
+        ),
+
+        // ====================================================
+        // TRASH
+        // ====================================================
+
+        GoRoute(
+          path: '/trash',
+          builder: (context, state) {
+            return const TrashPage();
           },
         ),
 

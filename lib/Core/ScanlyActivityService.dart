@@ -12,11 +12,12 @@ class ScanlyActivityService {
   static final ActivityCloudStorage _cloudStorage =
       ActivityCloudStorage();
 
+  /// Any change in Recent/Favorites increments this version.
+  /// All pages that depend on activity data should listen to it.
   static final ValueNotifier<int> version =
       ValueNotifier<int>(0);
 
   static List<ScanlyItem> _favorites = [];
-
   static List<ScanlyItem> _recent = [];
 
   // ============================================================
@@ -30,13 +31,17 @@ class ScanlyActivityService {
       List.unmodifiable(_recent);
 
   static List<ScanlyItem> get favoritePreview =>
-      _favorites.take(5).toList();
+      List.unmodifiable(
+        _favorites.take(5).toList(),
+      );
 
   static List<ScanlyItem> get recentPreview =>
-      _recent.take(5).toList();
+      List.unmodifiable(
+        _recent.take(5).toList(),
+      );
 
   // ============================================================
-  // INIT
+  // INITIALIZATION
   // ============================================================
 
   static Future<void> init() async {
@@ -53,10 +58,6 @@ class ScanlyActivityService {
     _notify();
   }
 
-  // ============================================================
-  // LOAD LOCAL
-  // ============================================================
-
   static Future<void> _loadLocal() async {
     _favorites =
         await _localStorage.loadFavorites();
@@ -65,10 +66,6 @@ class ScanlyActivityService {
         await _localStorage.loadRecent();
   }
 
-  // ============================================================
-  // LOAD CLOUD
-  // ============================================================
-
   static Future<void> _loadFromCloud() async {
     final cloudFavorites =
         await _cloudStorage.loadFavorites();
@@ -76,29 +73,23 @@ class ScanlyActivityService {
     final cloudRecent =
         await _cloudStorage.loadRecent();
 
-    // If there is no logged-in user,
-    // cloud storage simply returns empty lists.
-    //
-    // Local cache remains untouched in that case.
+    // If cloud has nothing, keep the local data.
     if (cloudFavorites.isEmpty &&
         cloudRecent.isEmpty) {
       return;
     }
 
     _favorites = cloudFavorites;
-
     _recent = cloudRecent;
 
     await _saveLocal();
   }
 
   // ============================================================
-  // FAVORITE
+  // FAVORITES
   // ============================================================
 
-  static bool isFavorite(
-    String id,
-  ) {
+  static bool isFavorite(String id) {
     return _favorites.any(
       (item) => item.id == id,
     );
@@ -172,9 +163,8 @@ class ScanlyActivityService {
     );
 
     if (_recent.length > _maxRecentItems) {
-      _recent = _recent
-          .take(_maxRecentItems)
-          .toList();
+      _recent =
+          _recent.take(_maxRecentItems).toList();
     }
 
     await _localStorage.saveRecent(
@@ -207,15 +197,90 @@ class ScanlyActivityService {
   }
 
   // ============================================================
+  // REMOVE ITEM FROM EVERYTHING
+  // ============================================================
+
+  static Future<void> removeItemFromAll(
+    String id,
+  ) async {
+    final hasFavorite =
+        isFavorite(id);
+
+    final hasRecent = _recent.any(
+      (item) => item.id == id,
+    );
+
+    if (hasFavorite) {
+      await removeFavorite(id);
+    }
+
+    if (hasRecent) {
+      await removeRecent(id);
+    }
+  }
+
+  // ============================================================
+  // RESTORE REFERENCES
+  // ============================================================
+
+  static Future<void> restoreItemReferences({
+    required ScanlyItem item,
+    bool wasFavorite = false,
+    bool wasRecent = false,
+  }) async {
+    if (wasFavorite) {
+      await addFavorite(item);
+    }
+
+    if (wasRecent) {
+      await addRecent(item);
+    }
+
+    _notify();
+  }
+
+  // ============================================================
   // CLEAR FAVORITES
   // ============================================================
 
+  /// Clears ALL favorites.
   static Future<void> clearFavorites() async {
     _favorites.clear();
 
     await _localStorage.clearFavorites();
 
     await _cloudStorage.clearFavorites();
+
+    _notify();
+  }
+
+  /// Clears ONLY QR favorites.
+  ///
+  /// Other favorite types remain untouched.
+  static Future<void> clearQrFavorites() async {
+    final qrFavorites = _favorites
+        .where(
+          (item) => item.type == 'qr',
+        )
+        .toList();
+
+    if (qrFavorites.isEmpty) {
+      return;
+    }
+
+    _favorites.removeWhere(
+      (item) => item.type == 'qr',
+    );
+
+    await _localStorage.saveFavorites(
+      _favorites,
+    );
+
+    for (final item in qrFavorites) {
+      await _cloudStorage.deleteFavorite(
+        item.id,
+      );
+    }
 
     _notify();
   }
@@ -250,7 +315,7 @@ class ScanlyActivityService {
   }
 
   // ============================================================
-  // SAVE LOCAL
+  // LOCAL SAVE
   // ============================================================
 
   static Future<void> _saveLocal() async {

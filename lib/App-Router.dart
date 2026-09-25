@@ -1,9 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scanly/Core/AppRouters.dart';
 import 'package:scanly/Core/GoRouterRefreshStream.dart';
-
-
 
 // ============================================================
 // APP ROUTER
@@ -47,11 +46,14 @@ class AppRouter {
   // ==========================================================
 
   static String? _redirect(
-    context,
+    BuildContext context,
     GoRouterState state,
   ) {
-    final User? user = FirebaseAuth.instance.currentUser;
-    final String location = state.uri.path;
+    final User? user =
+        FirebaseAuth.instance.currentUser;
+
+    final String location =
+        state.uri.path;
 
     // ========================================================
     // ROOT
@@ -73,12 +75,21 @@ class AppRouter {
     // AUTH PAGES
     // ========================================================
 
-    final bool isLogin = location == '/login';
-    final bool isRegister = location == '/register';
-    final bool isVerification = location == '/verification';
+    final bool isLogin =
+        location == '/login';
+
+    final bool isRegister =
+        location == '/register';
+
+    final bool isVerification =
+        location == '/verification';
+
     final bool isForgotPassword =
-        location == '/forgot-password-verification';
-    final bool isOnboarding = location == '/onboarding';
+        location ==
+            '/forgot-password-verification';
+
+    final bool isOnboarding =
+        location == '/onboarding';
 
     final bool isAuthPage =
         isLogin ||
@@ -119,6 +130,18 @@ class AppRouter {
     }
 
     // ========================================================
+    // PROTECTED APP PAGES
+    // ========================================================
+
+    // Trash is a protected page automatically
+    // because unauthenticated users are redirected
+    // above.
+
+    if (location == '/trash') {
+      return null;
+    }
+
+    // ========================================================
     // ALLOW CURRENT LOCATION
     // ========================================================
 
@@ -131,11 +154,15 @@ class AppRouter {
 
   static bool _isEmailUser(User user) {
     return user.providerData.any(
-      (provider) => provider.providerId == 'password',
+      (provider) =>
+          provider.providerId == 'password',
     );
   }
 
-  static bool _isUnverifiedEmailUser(User user) {
-    return _isEmailUser(user) && !user.emailVerified;
+  static bool _isUnverifiedEmailUser(
+    User user,
+  ) {
+    return _isEmailUser(user) &&
+        !user.emailVerified;
   }
 }

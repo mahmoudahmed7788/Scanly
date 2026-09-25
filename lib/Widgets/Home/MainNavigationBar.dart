@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-
-// ============================================================
-// MAIN NAVIGATION PAGE
-// ============================================================
-
 class MainNavigationPage extends StatelessWidget {
   final Widget child;
 
@@ -14,12 +9,11 @@ class MainNavigationPage extends StatelessWidget {
     required this.child,
   });
 
-  // ==========================================================
-  // CURRENT NAVIGATION INDEX
-  // ==========================================================
-
-  int _getCurrentIndex(BuildContext context) {
-    final String location = GoRouterState.of(context).uri.path;
+  int _getCurrentIndex(
+    BuildContext context,
+  ) {
+    final location =
+        GoRouterState.of(context).uri.path;
 
     if (location.startsWith('/documents')) {
       return 1;
@@ -29,16 +23,16 @@ class MainNavigationPage extends StatelessWidget {
       return 2;
     }
 
-    if (location.startsWith('/settings')) {
+    if (location.startsWith('/trash')) {
       return 3;
+    }
+
+    if (location.startsWith('/settings')) {
+      return 4;
     }
 
     return 0;
   }
-
-  // ==========================================================
-  // NAVIGATION ACTION
-  // ==========================================================
 
   void _onItemTapped(
     BuildContext context,
@@ -58,16 +52,17 @@ class MainNavigationPage extends StatelessWidget {
         break;
 
       case 3:
+        context.go('/trash');
+        break;
+
+      case 4:
         context.go('/settings');
         break;
     }
   }
 
-  // ==========================================================
-  // NAVIGATION DESTINATIONS
-  // ==========================================================
-
-  List<NavigationDestination> _buildDestinations() {
+  List<NavigationDestination>
+      _buildDestinations() {
     return const [
       NavigationDestination(
         icon: Icon(
@@ -101,6 +96,16 @@ class MainNavigationPage extends StatelessWidget {
 
       NavigationDestination(
         icon: Icon(
+          Icons.delete_outline,
+        ),
+        selectedIcon: Icon(
+          Icons.delete,
+        ),
+        label: 'Trash',
+      ),
+
+      NavigationDestination(
+        icon: Icon(
           Icons.settings_outlined,
         ),
         selectedIcon: Icon(
@@ -111,25 +116,27 @@ class MainNavigationPage extends StatelessWidget {
     ];
   }
 
-  // ==========================================================
-  // BUILD
-  // ==========================================================
-
   @override
-  Widget build(BuildContext context) {
-    final int currentIndex = _getCurrentIndex(context);
+  Widget build(
+    BuildContext context,
+  ) {
+    final currentIndex =
+        _getCurrentIndex(context);
 
     return Scaffold(
       body: child,
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar:
+          NavigationBar(
         selectedIndex: currentIndex,
-        onDestinationSelected: (index) {
+        onDestinationSelected:
+            (index) {
           _onItemTapped(
             context,
             index,
           );
         },
-        destinations: _buildDestinations(),
+        destinations:
+            _buildDestinations(),
       ),
     );
   }

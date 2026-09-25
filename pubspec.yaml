@@ -59,6 +59,8 @@ dependencies:
   image: ^4.9.2
   supabase_flutter: ^2.10.2
 
+  google_mobile_ads: ^9.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

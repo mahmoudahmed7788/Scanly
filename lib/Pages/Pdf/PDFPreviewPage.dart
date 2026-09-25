@@ -3,20 +3,19 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:scanly/Core/DocumentStorage.dart';
 import 'package:scanly/Core/Scanly_Items.dart';
-import 'package:scanly/Core/SupabaseStorageService.dart';
 import 'package:scanly/Models/DocumentModel.dart';
 import 'package:scanly/Pages/Pdf/PDFEditingPage.dart';
+import 'package:scanly/Service/Pdf/PDFPreviewService.dart';
+import 'package:scanly/Widgets/PDF/PDFPreviewActions.dart';
+import 'package:scanly/Widgets/PDF/PDFPreviewViewer.dart';
 import 'package:scanly/core/ScanlyActivityService.dart';
-
-
-
 import 'package:share_plus/share_plus.dart';
 
-class PDFPreviewPage extends StatefulWidget {
+class PDFPreviewPage
+    extends StatefulWidget {
   final Uint8List pdfBytes;
   final String fileName;
   final String? filePath;
@@ -55,6 +54,10 @@ class _PDFPreviewPageState
 
   String? _pdfError;
 
+  // ============================================================
+  // INIT
+  // ============================================================
+
   @override
   void initState() {
     super.initState();
@@ -71,14 +74,8 @@ class _PDFPreviewPageState
 
     _currentFilePath =
         widget.filePath ??
-        widget.document.filePath;
+            widget.document.filePath;
 
-    // IMPORTANT:
-    //
-    // If PDFPreviewPage receives imagePaths,
-    // use them.
-    //
-    // Otherwise get them from DocumentModel.
     _imagePaths =
         widget.imagePaths.isNotEmpty
             ? List<String>.from(
@@ -114,72 +111,21 @@ class _PDFPreviewPageState
     );
 
     debugPrint(
-      'IMAGE PATHS: '
-      '${_imagePaths.length}',
+      'IMAGE PATHS: ${_imagePaths.length}',
     );
 
     _initializePdf();
   }
 
+  // ============================================================
+  // DISPOSE
+  // ============================================================
+
   @override
   void dispose() {
     _pdfController?.dispose();
+
     super.dispose();
-  }
-
-  // ============================================================
-  // PDF VALIDATION
-  // ============================================================
-
-  bool _hasPdfHeader(
-    Uint8List bytes,
-  ) {
-    if (bytes.length < 5) {
-      return false;
-    }
-
-    return bytes[0] == 0x25 &&
-        bytes[1] == 0x50 &&
-        bytes[2] == 0x44 &&
-        bytes[3] == 0x46 &&
-        bytes[4] == 0x2D;
-  }
-
-  bool _isValidPdfFile(
-    File file,
-  ) {
-    try {
-      if (!file.existsSync()) {
-        return false;
-      }
-
-      if (file.lengthSync() < 5) {
-        return false;
-      }
-
-      final raf =
-          file.openSync();
-
-      try {
-        final header =
-            raf.readSync(5);
-
-        return header.length >= 5 &&
-            header[0] == 0x25 &&
-            header[1] == 0x50 &&
-            header[2] == 0x44 &&
-            header[3] == 0x46 &&
-            header[4] == 0x2D;
-      } finally {
-        raf.closeSync();
-      }
-    } catch (e) {
-      debugPrint(
-        'PDF VALIDATION ERROR: $e',
-      );
-
-      return false;
-    }
   }
 
   // ============================================================
@@ -188,49 +134,54 @@ class _PDFPreviewPageState
 
   Future<void> _initializePdf() async {
     try {
-      setState(() {
-        _loadingPdf = true;
-        _pdfError = null;
-      });
+      if (mounted) {
+        setState(() {
+          _loadingPdf = true;
+          _pdfError = null;
+        });
+      }
 
       // --------------------------------------------------------
-      // LOCAL FILE
+      // 1. LOCAL FILE
       // --------------------------------------------------------
 
       if (_currentFilePath != null &&
           _currentFilePath!.isNotEmpty) {
         final file =
             File(
-          _currentFilePath!,
-        );
-
-        if (await file.exists()) {
-          if (_isValidPdfFile(file)) {
-            debugPrint(
-              'VALID LOCAL PDF FOUND.',
+              _currentFilePath!,
             );
 
-            await _openPdfFromFile(
-              file.path,
-            );
-
-            await _loadFavorite();
-
-            return;
-          }
-
+        if (await file.exists() &&
+            PDFPreviewService
+                .isValidPdfFile(
+              file,
+            )) {
           debugPrint(
-            'LOCAL PDF EXISTS BUT IS INVALID.',
+            'VALID LOCAL PDF FOUND.',
           );
+
+          await _openPdfFromFile(
+            file.path,
+          );
+
+          await _loadFavorite();
+
+          return;
         }
+
+        debugPrint(
+          'LOCAL PDF NOT FOUND OR INVALID.',
+        );
       }
 
       // --------------------------------------------------------
-      // PDF BYTES
+      // 2. PDF BYTES
       // --------------------------------------------------------
 
       if (_pdfBytes.isNotEmpty &&
-          _hasPdfHeader(
+          PDFPreviewService
+              .hasPdfHeader(
             _pdfBytes,
           )) {
         debugPrint(
@@ -238,15 +189,23 @@ class _PDFPreviewPageState
         );
 
         final path =
-            await _writePdfBytesToLocalFile(
-          _pdfBytes,
+            await PDFPreviewService
+                .writePdfBytesToLocalFile(
+          bytes: _pdfBytes,
+          fileName: _fileName,
+          currentFilePath:
+              _currentFilePath,
         );
 
-        _currentFilePath =
-            path;
+        _currentFilePath = path;
 
         widget.document.filePath =
             path;
+
+        await DocumentStorage
+            .updateDocumentLocally(
+          widget.document,
+        );
 
         await _openPdfFromFile(
           path,
@@ -258,11 +217,17 @@ class _PDFPreviewPageState
       }
 
       // --------------------------------------------------------
-      // SUPABASE
+      // 3. SUPABASE
       // --------------------------------------------------------
 
-      if (widget.document.storagePath != null &&
-          widget.document.storagePath!.isNotEmpty) {
+      if (widget.document.storagePath !=
+              null &&
+          widget.document.storagePath!
+              .isNotEmpty) {
+        debugPrint(
+          'TRYING TO RESTORE PDF FROM SUPABASE...',
+        );
+
         await _downloadPdfFromCloud();
 
         if (_currentFilePath != null &&
@@ -273,9 +238,17 @@ class _PDFPreviewPageState
           );
 
           if (await file.exists() &&
-              _isValidPdfFile(file)) {
+              PDFPreviewService
+                  .isValidPdfFile(
+                file,
+              )) {
             await _openPdfFromFile(
               file.path,
+            );
+
+            await DocumentStorage
+                .updateDocumentLocally(
+              widget.document,
             );
 
             await _loadFavorite();
@@ -317,11 +290,7 @@ class _PDFPreviewPageState
     String path,
   ) async {
     debugPrint(
-      'OPENING PDF:',
-    );
-
-    debugPrint(
-      path,
+      'OPENING PDF: $path',
     );
 
     final file =
@@ -333,7 +302,8 @@ class _PDFPreviewPageState
       );
     }
 
-    if (!_isValidPdfFile(file)) {
+    if (!PDFPreviewService
+        .isValidPdfFile(file)) {
       throw Exception(
         'Invalid PDF file.',
       );
@@ -360,7 +330,6 @@ class _PDFPreviewPageState
           controller;
 
       _loadingPdf = false;
-
       _pdfError = null;
     });
 
@@ -372,79 +341,10 @@ class _PDFPreviewPageState
   }
 
   // ============================================================
-  // WRITE PDF
+  // DOWNLOAD FROM CLOUD
   // ============================================================
 
-  Future<String>
-      _writePdfBytesToLocalFile(
-    Uint8List bytes,
-  ) async {
-    if (!_hasPdfHeader(
-      bytes,
-    )) {
-      throw Exception(
-        'Invalid PDF bytes.',
-      );
-    }
-
-    final directory =
-        await DocumentStorage
-            .getDocumentsDirectory();
-
-    final cleanName =
-        _cleanName(
-      _fileName,
-    );
-
-    String path;
-
-    if (_currentFilePath != null &&
-        _currentFilePath!.isNotEmpty) {
-      final current =
-          File(
-        _currentFilePath!,
-      );
-
-      if (current.parent.path ==
-          directory.path) {
-        path =
-            current.path;
-      } else {
-        path =
-            '${directory.path}/'
-            '$cleanName.pdf';
-      }
-    } else {
-      path =
-          '${directory.path}/'
-          '$cleanName.pdf';
-    }
-
-    final file =
-        File(path);
-
-    await file.writeAsBytes(
-      bytes,
-      flush: true,
-    );
-
-    if (!_isValidPdfFile(
-      file,
-    )) {
-      throw Exception(
-        'PDF write verification failed.',
-      );
-    }
-
-    return path;
-  }
-
-  // ============================================================
-  // DOWNLOAD FROM SUPABASE
-  // ============================================================
-
-  Future<void>
-      _downloadPdfFromCloud() async {
+  Future<void> _downloadPdfFromCloud() async {
     final storagePath =
         widget.document.storagePath;
 
@@ -463,19 +363,10 @@ class _PDFPreviewPageState
 
     try {
       final bytes =
-          await SupabaseStorageService
-              .downloadFile(
+          await PDFPreviewService
+              .downloadPdfFromCloud(
         storagePath,
       );
-
-      if (bytes.isEmpty ||
-          !_hasPdfHeader(
-            bytes,
-          )) {
-        throw Exception(
-          'Downloaded file is not a valid PDF.',
-        );
-      }
 
       _pdfBytes =
           Uint8List.fromList(
@@ -483,8 +374,12 @@ class _PDFPreviewPageState
       );
 
       final localPath =
-          await _writePdfBytesToLocalFile(
-        _pdfBytes,
+          await PDFPreviewService
+              .writePdfBytesToLocalFile(
+        bytes: _pdfBytes,
+        fileName: _fileName,
+        currentFilePath:
+            _currentFilePath,
       );
 
       _currentFilePath =
@@ -493,12 +388,13 @@ class _PDFPreviewPageState
       widget.document.filePath =
           localPath;
 
-      debugPrint(
-        'PDF DOWNLOADED TO:',
+      await DocumentStorage
+          .updateDocumentLocally(
+        widget.document,
       );
 
       debugPrint(
-        localPath,
+        'PDF DOWNLOADED TO: $localPath',
       );
     } finally {
       if (mounted) {
@@ -507,47 +403,6 @@ class _PDFPreviewPageState
         });
       }
     }
-  }
-
-  // ============================================================
-  // CLEAN NAME
-  // ============================================================
-
-  String _cleanName(
-    String value,
-  ) {
-    var name =
-        value.trim();
-
-    if (name.isEmpty) {
-      name =
-          'Scanly Document';
-    }
-
-    name =
-        name.replaceAll(
-      RegExp(
-        r'[\\/:*?"<>|]',
-      ),
-      '_',
-    );
-
-    if (name
-        .toLowerCase()
-        .endsWith('.pdf')) {
-      name =
-          name.substring(
-        0,
-        name.length - 4,
-      );
-    }
-
-    if (name.trim().isEmpty) {
-      name =
-          'Scanly Document';
-    }
-
-    return name.trim();
   }
 
   // ============================================================
@@ -579,8 +434,11 @@ class _PDFPreviewPageState
   // ENSURE PDF
   // ============================================================
 
-  Future<String>
-      _ensurePdfFile() async {
+  Future<String> _ensurePdfFile() async {
+    // --------------------------------------------------------
+    // 1. Existing local PDF
+    // --------------------------------------------------------
+
     if (_currentFilePath != null &&
         _currentFilePath!.isNotEmpty) {
       final file =
@@ -589,20 +447,30 @@ class _PDFPreviewPageState
       );
 
       if (await file.exists() &&
-          _isValidPdfFile(
+          PDFPreviewService
+              .isValidPdfFile(
             file,
           )) {
         return file.path;
       }
     }
 
+    // --------------------------------------------------------
+    // 2. PDF bytes
+    // --------------------------------------------------------
+
     if (_pdfBytes.isNotEmpty &&
-        _hasPdfHeader(
+        PDFPreviewService
+            .hasPdfHeader(
           _pdfBytes,
         )) {
       final path =
-          await _writePdfBytesToLocalFile(
-        _pdfBytes,
+          await PDFPreviewService
+              .writePdfBytesToLocalFile(
+        bytes: _pdfBytes,
+        fileName: _fileName,
+        currentFilePath:
+            _currentFilePath,
       );
 
       _currentFilePath =
@@ -611,11 +479,22 @@ class _PDFPreviewPageState
       widget.document.filePath =
           path;
 
+      await DocumentStorage
+          .updateDocumentLocally(
+        widget.document,
+      );
+
       return path;
     }
 
-    if (widget.document.storagePath != null &&
-        widget.document.storagePath!.isNotEmpty) {
+    // --------------------------------------------------------
+    // 3. Supabase
+    // --------------------------------------------------------
+
+    if (widget.document.storagePath !=
+            null &&
+        widget.document.storagePath!
+            .isNotEmpty) {
       await _downloadPdfFromCloud();
 
       if (_currentFilePath != null &&
@@ -637,20 +516,15 @@ class _PDFPreviewPageState
     String path,
   ) {
     return ScanlyItem(
-      id:
-          _pdfId(),
+      id: _pdfId(),
       title:
           widget.document.title.isNotEmpty
               ? widget.document.title
               : 'PDF Document',
-      subtitle:
-          _fileName,
-      type:
-          'pdf',
-      route:
-          '/pdf-preview',
-      data:
-          path,
+      subtitle: _fileName,
+      type: 'pdf',
+      route: '/pdf-preview',
+      data: path,
       createdAt:
           DateTime.now()
               .millisecondsSinceEpoch,
@@ -676,6 +550,10 @@ class _PDFPreviewPageState
       return;
     }
 
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _saving = true;
     });
@@ -694,12 +572,24 @@ class _PDFPreviewPageState
 
       await _updateRecent();
 
+      final cleanName =
+          PDFPreviewService
+              .cleanName(
+        _fileName,
+      );
+
+      await PDFPreviewService
+          .saveToPhoneFiles(
+        pdfPath: path,
+        fileName: cleanName,
+      );
+
       if (!mounted) {
         return;
       }
 
       _showMessage(
-        'PDF saved successfully',
+        'PDF saved to Documents/Scanly/Documents',
         Icons.check_circle_outline_rounded,
       );
     } catch (e) {
@@ -728,40 +618,6 @@ class _PDFPreviewPageState
   // SHARE
   // ============================================================
 
-  Future<File>
-      _createShareFile() async {
-    final path =
-        await _ensurePdfFile();
-
-    final source =
-        File(path);
-
-    if (!await source.exists()) {
-      throw Exception(
-        'PDF file does not exist.',
-      );
-    }
-
-    final directory =
-        await getTemporaryDirectory();
-
-    final cleanName =
-        _cleanName(
-      _fileName,
-    );
-
-    final file =
-        File(
-      '${directory.path}/$cleanName.pdf',
-    );
-
-    await source.copy(
-      file.path,
-    );
-
-    return file;
-  }
-
   Future<void> _sharePdf() async {
     if (_sharing) {
       return;
@@ -772,8 +628,15 @@ class _PDFPreviewPageState
     });
 
     try {
+      final path =
+          await _ensurePdfFile();
+
       final file =
-          await _createShareFile();
+          await PDFPreviewService
+              .createShareFile(
+        pdfPath: path,
+        fileName: _fileName,
+      );
 
       await Share.shareXFiles(
         [
@@ -812,8 +675,7 @@ class _PDFPreviewPageState
   // FAVORITE
   // ============================================================
 
-  Future<void>
-      _toggleFavorite() async {
+  Future<void> _toggleFavorite() async {
     try {
       final path =
           await _ensurePdfFile();
@@ -862,40 +724,19 @@ class _PDFPreviewPageState
       return;
     }
 
-    debugPrint(
-      'EDIT BUTTON PRESSED',
-    );
-
-    debugPrint(
-      'IMAGE PATHS COUNT: '
-      '${_imagePaths.length}',
-    );
-
-    // ----------------------------------------------------------
-    // Verify images.
-    // ----------------------------------------------------------
-
     final validImages =
         <String>[];
 
     for (final path
         in _imagePaths) {
       if (path.isNotEmpty &&
-          await File(path)
-              .exists()) {
-        validImages.add(
-          path,
-        );
+          await File(path).exists()) {
+        validImages.add(path);
       }
     }
 
     _imagePaths =
         validImages;
-
-    debugPrint(
-      'VALID IMAGE PATHS: '
-      '${_imagePaths.length}',
-    );
 
     if (_imagePaths.isEmpty) {
       _showMessage(
@@ -962,7 +803,8 @@ class _PDFPreviewPageState
         return;
       }
 
-      if (!_hasPdfHeader(
+      if (!PDFPreviewService
+          .hasPdfHeader(
         newBytes,
       )) {
         _showMessage(
@@ -981,8 +823,7 @@ class _PDFPreviewPageState
             in newImages) {
           if (path is String &&
               path.isNotEmpty &&
-              await File(path)
-                  .exists()) {
+              await File(path).exists()) {
             updatedImages.add(
               path,
             );
@@ -1020,15 +861,15 @@ class _PDFPreviewPageState
         }
       });
 
-      await _pdfController?.loadDocument(
+      await _pdfController
+          ?.loadDocument(
         PdfDocument.openData(
           _pdfBytes,
         ),
       );
 
       await _saveEditedPdf(
-        oldPath:
-            oldPath,
+        oldPath: oldPath,
         wasFavorite:
             wasFavorite,
       );
@@ -1071,7 +912,8 @@ class _PDFPreviewPageState
             .getDocumentsDirectory();
 
     final cleanName =
-        _cleanName(
+        PDFPreviewService
+            .cleanName(
       _fileName,
     );
 
@@ -1079,23 +921,26 @@ class _PDFPreviewPageState
 
     if (oldPath != null &&
         oldPath.isNotEmpty) {
-      path =
-          oldPath;
+      path = oldPath;
     } else {
       path =
-          '${directory.path}/'
-          '$cleanName.pdf';
+          '${directory.path}/$cleanName.pdf';
     }
 
     final file =
         File(path);
+
+    await file.parent.create(
+      recursive: true,
+    );
 
     await file.writeAsBytes(
       _pdfBytes,
       flush: true,
     );
 
-    if (!_isValidPdfFile(
+    if (!PDFPreviewService
+        .isValidPdfFile(
       file,
     )) {
       throw Exception(
@@ -1117,9 +962,6 @@ class _PDFPreviewPageState
       _imagePaths,
     );
 
-    // The existing storagePath belongs
-    // to the old PDF. Clear it so the
-    // updated PDF can be uploaded again.
     widget.document.storagePath =
         null;
 
@@ -1129,6 +971,12 @@ class _PDFPreviewPageState
     );
 
     await _updateRecent();
+
+    await PDFPreviewService
+        .saveToPhoneFiles(
+      pdfPath: path,
+      fileName: cleanName,
+    );
 
     if (wasFavorite) {
       await ScanlyActivityService
@@ -1179,12 +1027,9 @@ class _PDFPreviewPageState
           shape:
               RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(
-              16,
-            ),
+                BorderRadius.circular(16),
           ),
-          content:
-              Row(
+          content: Row(
             children: [
               Icon(
                 icon,
@@ -1192,15 +1037,12 @@ class _PDFPreviewPageState
                     colors.onInverseSurface,
               ),
               const SizedBox(
-                width:
-                    10,
+                width: 10,
               ),
               Expanded(
-                child:
-                    Text(
+                child: Text(
                   message,
-                  style:
-                      TextStyle(
+                  style: TextStyle(
                     color:
                         colors.onInverseSurface,
                     fontWeight:
@@ -1212,423 +1054,6 @@ class _PDFPreviewPageState
           ),
         ),
       );
-  }
-
-  // ============================================================
-  // PREVIEW
-  // ============================================================
-
-  Widget _buildPdfPreview(
-    ColorScheme colors,
-  ) {
-    if (_loadingPdf) {
-      return Container(
-        margin:
-            const EdgeInsets.fromLTRB(
-          10,
-          0,
-          10,
-          10,
-        ),
-        decoration:
-            BoxDecoration(
-          color:
-              colors.surfaceContainerHighest,
-          borderRadius:
-              BorderRadius.circular(
-            14,
-          ),
-        ),
-        child:
-            const Center(
-          child:
-              CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    if (_pdfError != null ||
-        _pdfController == null) {
-      return Container(
-        margin:
-            const EdgeInsets.fromLTRB(
-          10,
-          0,
-          10,
-          10,
-        ),
-        decoration:
-            BoxDecoration(
-          color:
-              colors.surfaceContainerHighest,
-          borderRadius:
-              BorderRadius.circular(
-            14,
-          ),
-        ),
-        child:
-            Center(
-          child:
-              Padding(
-            padding:
-                const EdgeInsets.all(
-              24,
-            ),
-            child:
-                Column(
-              mainAxisAlignment:
-                  MainAxisAlignment
-                      .center,
-              children: [
-                Icon(
-                  Icons
-                      .picture_as_pdf_outlined,
-                  size:
-                      56,
-                  color:
-                      colors.error,
-                ),
-                const SizedBox(
-                  height:
-                      14,
-                ),
-                Text(
-                  'PDF is not available',
-                  style:
-                      TextStyle(
-                    fontSize:
-                        18,
-                    fontWeight:
-                        FontWeight.w800,
-                    color:
-                        colors.onSurface,
-                  ),
-                ),
-                const SizedBox(
-                  height:
-                      8,
-                ),
-                Text(
-                  _pdfError ??
-                      'Could not open this PDF.',
-                  textAlign:
-                      TextAlign.center,
-                  style:
-                      TextStyle(
-                    color:
-                        colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      margin:
-          const EdgeInsets.fromLTRB(
-        10,
-        0,
-        10,
-        10,
-      ),
-      decoration:
-          BoxDecoration(
-        color:
-            colors.surfaceContainerHighest,
-        borderRadius:
-            BorderRadius.circular(
-          14,
-        ),
-      ),
-      clipBehavior:
-          Clip.antiAlias,
-      child:
-          PdfViewPinch(
-        controller:
-            _pdfController!,
-        scrollDirection:
-            Axis.vertical,
-        backgroundDecoration:
-            BoxDecoration(
-          color:
-              colors.surfaceContainerHighest,
-        ),
-        onDocumentLoaded:
-            (document) {
-          debugPrint(
-            'PDF PREVIEW LOADED: '
-            '${document.pagesCount} pages',
-          );
-        },
-        onDocumentError:
-            (error) {
-          debugPrint(
-            'PDF PREVIEW ERROR: $error',
-          );
-
-          if (mounted) {
-            setState(() {
-              _pdfError =
-                  'PDF renderer could not read this file.';
-            });
-          }
-        },
-      ),
-    );
-  }
-
-  // ============================================================
-  // ACTIONS
-  // ============================================================
-
-  Widget _buildActions(
-    ColorScheme colors,
-  ) {
-    return Container(
-      margin:
-          const EdgeInsets.fromLTRB(
-        14,
-        4,
-        14,
-        14,
-      ),
-      padding:
-          const EdgeInsets.all(
-        10,
-      ),
-      decoration:
-          BoxDecoration(
-        color:
-            colors.surface,
-        borderRadius:
-            BorderRadius.circular(
-          20,
-        ),
-        border:
-            Border.all(
-          color:
-              colors.onSurface
-                  .withValues(
-            alpha:
-                0.08,
-          ),
-        ),
-      ),
-      child:
-          Row(
-        children: [
-          Expanded(
-            child:
-                _actionButton(
-              colors:
-                  colors,
-              icon:
-                  Icons.edit_rounded,
-              label:
-                  'Edit',
-              onPressed:
-                  _editing
-                      ? null
-                      : _editPdf,
-              outlined:
-                  true,
-              loading:
-                  _editing,
-            ),
-          ),
-          const SizedBox(
-            width:
-                8,
-          ),
-          Expanded(
-            child:
-                _actionButton(
-              colors:
-                  colors,
-              icon:
-                  Icons.share_rounded,
-              label:
-                  'Share',
-              onPressed:
-                  _sharing
-                      ? null
-                      : _sharePdf,
-              outlined:
-                  true,
-              loading:
-                  _sharing,
-            ),
-          ),
-          const SizedBox(
-            width:
-                8,
-          ),
-          Expanded(
-            child:
-                _actionButton(
-              colors:
-                  colors,
-              icon:
-                  Icons.save_rounded,
-              label:
-                  'Save',
-              onPressed:
-                  _saving
-                      ? null
-                      : _savePdf,
-              outlined:
-                  false,
-              loading:
-                  _saving,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionButton({
-    required ColorScheme colors,
-    required IconData icon,
-    required String label,
-    required VoidCallback? onPressed,
-    required bool outlined,
-    required bool loading,
-  }) {
-    if (outlined) {
-      return OutlinedButton(
-        onPressed:
-            onPressed,
-        style:
-            OutlinedButton.styleFrom(
-          minimumSize:
-              const Size(
-            0,
-            50,
-          ),
-          padding:
-              const EdgeInsets
-                  .symmetric(
-            horizontal:
-                8,
-          ),
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(
-              15,
-            ),
-          ),
-        ),
-        child:
-            loading
-                ? const SizedBox(
-                    width:
-                        20,
-                    height:
-                        20,
-                    child:
-                        CircularProgressIndicator(
-                      strokeWidth:
-                          2,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment
-                            .center,
-                    children: [
-                      Icon(
-                        icon,
-                        size:
-                            20,
-                      ),
-                      const SizedBox(
-                        width:
-                            6,
-                      ),
-                      Text(
-                        label,
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight
-                                  .w800,
-                        ),
-                      ),
-                    ],
-                  ),
-      );
-    }
-
-    return FilledButton(
-      onPressed:
-          onPressed,
-      style:
-          FilledButton.styleFrom(
-        minimumSize:
-            const Size(
-          0,
-          50,
-        ),
-        padding:
-            const EdgeInsets
-                .symmetric(
-          horizontal:
-              8,
-        ),
-        shape:
-            RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.circular(
-            15,
-          ),
-        ),
-      ),
-      child:
-          loading
-              ? const SizedBox(
-                  width:
-                      20,
-                  height:
-                      20,
-                  child:
-                      CircularProgressIndicator(
-                    strokeWidth:
-                        2,
-                    color:
-                        Colors.white,
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment
-                          .center,
-                  children: [
-                    Icon(
-                      icon,
-                      size:
-                          20,
-                    ),
-                    const SizedBox(
-                      width:
-                          6,
-                    ),
-                    Text(
-                      label,
-                      style:
-                          const TextStyle(
-                        fontWeight:
-                            FontWeight
-                                .w800,
-                      ),
-                    ),
-                  ],
-                ),
-    );
   }
 
   // ============================================================
@@ -1646,8 +1071,8 @@ class _PDFPreviewPageState
     return Scaffold(
       backgroundColor:
           colors.surfaceContainerLowest,
-      appBar:
-          AppBar(
+
+      appBar: AppBar(
         leading:
             IconButton(
           onPressed: () {
@@ -1660,11 +1085,10 @@ class _PDFPreviewPageState
             Icons.arrow_back_rounded,
           ),
         ),
-        title:
-            Text(
+
+        title: Text(
           _fileName,
-          maxLines:
-              1,
+          maxLines: 1,
           overflow:
               TextOverflow.ellipsis,
           style:
@@ -1673,14 +1097,14 @@ class _PDFPreviewPageState
                 FontWeight.w800,
           ),
         ),
+
         actions: [
           IconButton(
             tooltip:
                 'Favorite',
             onPressed:
                 _toggleFavorite,
-            icon:
-                Icon(
+            icon: Icon(
               _isFavorite
                   ? Icons.star_rounded
                   : Icons
@@ -1689,16 +1113,50 @@ class _PDFPreviewPageState
           ),
         ],
       ),
-      body:
-          Column(
+
+      body: Column(
         children: [
-          _buildActions(
-            colors,
+          PDFPreviewActions(
+            colors: colors,
+            editing: _editing,
+            sharing: _sharing,
+            saving: _saving,
+            onEdit: _editPdf,
+            onShare: _sharePdf,
+            onSave: _savePdf,
           ),
+
           Expanded(
             child:
-                _buildPdfPreview(
-              colors,
+                PDFPreviewViewer(
+              colors: colors,
+              loading:
+                  _loadingPdf,
+              error:
+                  _pdfError,
+              controller:
+                  _pdfController,
+              onDocumentLoaded:
+                  (document) {
+                debugPrint(
+                  'PDF PREVIEW LOADED: '
+                  '${document.pagesCount} pages',
+                );
+              },
+              onDocumentError:
+                  (error) {
+                debugPrint(
+                  'PDF PREVIEW ERROR: '
+                  '$error',
+                );
+
+                if (mounted) {
+                  setState(() {
+                    _pdfError =
+                        'PDF renderer could not read this file.';
+                  });
+                }
+              },
             ),
           ),
         ],

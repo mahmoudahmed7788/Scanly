@@ -1,23 +1,30 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 class DocumentFileService {
   DocumentFileService._();
 
-  // =========================================================
-  // DOCUMENT DIRECTORY
-  // =========================================================
+  static const MethodChannel _channel =
+      MethodChannel('scanly/share');
 
-  static Future<Directory> getDocumentsDirectory(
+  // ============================================================
+  // INTERNAL APP DOCUMENTS
+  // ============================================================
+
+  static Future<Directory>
+      getDocumentsDirectory(
     String? uid,
   ) async {
     final appDirectory =
         await getApplicationDocumentsDirectory();
 
-    final userFolder = uid ?? 'guest';
+    final userFolder =
+        uid ?? 'guest';
 
-    final documentsDirectory = Directory(
+    final documentsDirectory =
+        Directory(
       '${appDirectory.path}/Scanly/Documents/$userFolder',
     );
 
@@ -30,12 +37,102 @@ class DocumentFileService {
     return documentsDirectory;
   }
 
-  // =========================================================
-  // FILE EXTENSION
-  // =========================================================
+  // ============================================================
+  // SAVE TO PUBLIC PHONE STORAGE
+  //
+  // Documents/Scanly/<folder>/
+  // ============================================================
 
-  static String getExtension(String path) {
-    final index = path.lastIndexOf('.');
+  static Future<String>
+      saveToScanlyFolder(
+    String filePath, {
+    required String fileName,
+    required String mimeType,
+    String folder = 'Documents',
+  }) async {
+    final file =
+        File(filePath);
+
+    if (!await file.exists()) {
+      throw Exception(
+        'Source file does not exist.',
+      );
+    }
+
+    final result =
+        await _channel.invokeMethod<String>(
+      'saveFileToScanly',
+      {
+        'filePath': filePath,
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'folder': folder,
+      },
+    );
+
+    if (result == null ||
+        result.isEmpty) {
+      throw Exception(
+        'File was not saved to Scanly folder.',
+      );
+    }
+
+    return result;
+  }
+
+  // ============================================================
+  // PDF
+  // ============================================================
+
+  static Future<String>
+      savePdfToPhone(
+    String filePath,
+    String fileName,
+  ) async {
+    return saveToScanlyFolder(
+      filePath,
+      fileName:
+          fileName.toLowerCase().endsWith('.pdf')
+              ? fileName
+              : '$fileName.pdf',
+      mimeType:
+          'application/pdf',
+      folder:
+          'Documents',
+    );
+  }
+
+  // ============================================================
+  // QR
+  // ============================================================
+
+  static Future<String>
+      saveQrToPhone(
+    String filePath,
+    String fileName,
+  ) async {
+    return saveToScanlyFolder(
+      filePath,
+      fileName:
+          fileName.toLowerCase().endsWith('.png')
+              ? fileName
+              : '$fileName.png',
+      mimeType:
+          'image/png',
+      folder:
+          'QR Codes',
+    );
+  }
+
+  // ============================================================
+  // EXTENSION
+  // ============================================================
+
+  static String getExtension(
+    String path,
+  ) {
+    final index =
+        path.lastIndexOf('.');
 
     if (index == -1) {
       return '';
@@ -46,12 +143,15 @@ class DocumentFileService {
         .toLowerCase();
   }
 
-  // =========================================================
+  // ============================================================
   // REMOVE EXTENSION
-  // =========================================================
+  // ============================================================
 
-  static String removeExtension(String fileName) {
-    final index = fileName.lastIndexOf('.');
+  static String removeExtension(
+    String fileName,
+  ) {
+    final index =
+        fileName.lastIndexOf('.');
 
     if (index == -1) {
       return fileName;
@@ -63,27 +163,32 @@ class DocumentFileService {
     );
   }
 
-  // =========================================================
+  // ============================================================
   // SUPPORTED FILE
-  // =========================================================
+  // ============================================================
 
-  static bool isSupportedFile(String extension) {
+  static bool isSupportedFile(
+    String extension,
+  ) {
     return extension == '.pdf';
   }
 
-  // =========================================================
+  // ============================================================
   // DELETE LOCAL FILE
-  // =========================================================
+  // ============================================================
 
-  static Future<void> deleteLocalFile(
+  static Future<void>
+      deleteLocalFile(
     String? path,
   ) async {
-    if (path == null || path.isEmpty) {
+    if (path == null ||
+        path.isEmpty) {
       return;
     }
 
     try {
-      final file = File(path);
+      final file =
+          File(path);
 
       if (await file.exists()) {
         await file.delete();
@@ -95,11 +200,14 @@ class DocumentFileService {
     }
   }
 
-  // =========================================================
+  // ============================================================
   // CREATE ID
-  // =========================================================
+  // ============================================================
 
-  static String createId(File file) {
-    return file.path.hashCode.toString();
+  static String createId(
+    File file,
+  ) {
+    return file.path.hashCode
+        .toString();
   }
 }

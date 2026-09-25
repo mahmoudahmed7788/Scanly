@@ -2,12 +2,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scanly/Core/NotificationService.dart';
+import 'package:scanly/Core/ScanlyActivityService.dart';
 import 'package:scanly/Widgets/Home/HomeActivityAction.dart';
 import 'package:scanly/Widgets/Home/HomeNotificationButton.dart';
 import 'package:scanly/Widgets/Home/HomeToolCard.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({
+    super.key,
+  });
 
   static const Color primaryPurple =
       Color(0xFF5B5FEF);
@@ -32,6 +35,23 @@ class _HomePageState extends State<HomePage>
 
     WidgetsBinding.instance.addObserver(this);
 
+    // ==========================================================
+    // ACTIVITY LISTENER
+    // ==========================================================
+    //
+    // Whenever Recent/Favorites changes anywhere in the app:
+    //
+    // QR
+    // Notes
+    // PDF
+    // Other activities
+    //
+    // Home will rebuild.
+    //
+    ScanlyActivityService.version.addListener(
+      _onActivityChanged,
+    );
+
     loadUserName();
     loadUnreadNotifications();
   }
@@ -40,8 +60,28 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
 
+    ScanlyActivityService.version.removeListener(
+      _onActivityChanged,
+    );
+
     super.dispose();
   }
+
+  // ==========================================================
+  // ACTIVITY REFRESH
+  // ==========================================================
+
+  void _onActivityChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {});
+  }
+
+  // ==========================================================
+  // APP LIFECYCLE
+  // ==========================================================
 
   @override
   void didChangeAppLifecycleState(
@@ -50,19 +90,26 @@ class _HomePageState extends State<HomePage>
     if (state == AppLifecycleState.resumed) {
       loadUserName();
       loadUnreadNotifications();
+
+      // Rebuild Home when returning to it.
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
-  // =====================================================
+  // ==========================================================
   // NOTIFICATIONS
-  // =====================================================
+  // ==========================================================
 
   Future<void> loadUnreadNotifications() async {
     try {
       final count =
           await NotificationService.getUnreadCount();
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         unreadNotifications = count;
@@ -70,9 +117,9 @@ class _HomePageState extends State<HomePage>
     } catch (_) {}
   }
 
-  // =====================================================
+  // ==========================================================
   // USER
-  // =====================================================
+  // ==========================================================
 
   Future<void> loadUserName() async {
     final user =
@@ -89,11 +136,14 @@ class _HomePageState extends State<HomePage>
     final currentUser =
         FirebaseAuth.instance.currentUser;
 
-    final name = currentUser?.displayName;
+    final name =
+        currentUser?.displayName;
 
     if (name != null &&
         name.trim().isNotEmpty) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         userName = name.trim();
@@ -102,11 +152,14 @@ class _HomePageState extends State<HomePage>
       return;
     }
 
-    final email = currentUser?.email;
+    final email =
+        currentUser?.email;
 
     if (email != null &&
         email.isNotEmpty) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         userName =
@@ -115,23 +168,33 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  // =====================================================
+  // ==========================================================
   // REFRESH
-  // =====================================================
+  // ==========================================================
 
   Future<void> refreshHome() async {
     await loadUserName();
     await loadUnreadNotifications();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {});
   }
 
-  // =====================================================
+  // ==========================================================
   // NAVIGATION
-  // =====================================================
+  // ==========================================================
 
   Future<void> openNotifications() async {
-    await context.push('/notifications');
+    await context.push(
+      '/notifications',
+    );
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     await loadUnreadNotifications();
   }
@@ -156,23 +219,31 @@ class _HomePageState extends State<HomePage>
     context.push('/image-to-text');
   }
 
-  // =====================================================
+  // ==========================================================
   // BUILD
-  // =====================================================
+  // ==========================================================
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+  Widget build(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
+
+    final colors =
+        theme.colorScheme;
 
     return Scaffold(
       backgroundColor:
           theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: RefreshIndicator(
-          color: colors.primary,
-          onRefresh: refreshHome,
-          child: SingleChildScrollView(
+          color:
+              colors.primary,
+          onRefresh:
+              refreshHome,
+          child:
+              SingleChildScrollView(
             physics:
                 const AlwaysScrollableScrollPhysics(),
             padding:
@@ -186,27 +257,48 @@ class _HomePageState extends State<HomePage>
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
-                _buildHeader(context),
+                _buildHeader(
+                  context,
+                ),
 
-                const SizedBox(height: 32),
+                const SizedBox(
+                  height: 32,
+                ),
 
                 Text(
                   'What would you like to do?',
                   style: TextStyle(
                     fontSize: 20,
-                    color: colors.onSurface,
+                    color:
+                        colors.onSurface,
                     fontWeight:
                         FontWeight.w700,
                   ),
                 ),
 
-                const SizedBox(height: 18),
+                const SizedBox(
+                  height: 18,
+                ),
 
                 _buildToolsGrid(),
 
-                const SizedBox(height: 34),
+                const SizedBox(
+                  height: 34,
+                ),
 
-                const HomeActivitySections(),
+                // IMPORTANT:
+                //
+                // Removed const.
+                //
+                // This allows HomeActivitySections
+                // to rebuild whenever Home rebuilds.
+                HomeActivitySections(
+                  key: ValueKey(
+                    ScanlyActivityService
+                        .version
+                        .value,
+                  ),
+                ),
               ],
             ),
           ),
@@ -215,9 +307,9 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  // =====================================================
+  // ==========================================================
   // HEADER
-  // =====================================================
+  // ==========================================================
 
   Widget _buildHeader(
     BuildContext context,
@@ -243,7 +335,9 @@ class _HomePageState extends State<HomePage>
                 ),
               ),
 
-              const SizedBox(height: 4),
+              const SizedBox(
+                height: 4,
+              ),
 
               Text(
                 userName,
@@ -262,7 +356,9 @@ class _HomePageState extends State<HomePage>
           ),
         ),
 
-        const SizedBox(width: 10),
+        const SizedBox(
+          width: 10,
+        ),
 
         HomeNotificationButton(
           unreadCount:
@@ -271,22 +367,27 @@ class _HomePageState extends State<HomePage>
               openNotifications,
         ),
 
-        const SizedBox(width: 8),
+        const SizedBox(
+          width: 8,
+        ),
 
-        _buildProfileButton(context),
+        _buildProfileButton(
+          context,
+        ),
       ],
     );
   }
 
-  // =====================================================
+  // ==========================================================
   // PROFILE BUTTON
-  // =====================================================
+  // ==========================================================
 
   Widget _buildProfileButton(
     BuildContext context,
   ) {
     return Container(
-      decoration: BoxDecoration(
+      decoration:
+          BoxDecoration(
         gradient:
             const LinearGradient(
           colors: [
@@ -298,7 +399,8 @@ class _HomePageState extends State<HomePage>
             BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: HomePage.primaryPurple
+            color: HomePage
+                .primaryPurple
                 .withOpacity(0.25),
             blurRadius: 10,
             offset:
@@ -307,19 +409,21 @@ class _HomePageState extends State<HomePage>
         ],
       ),
       child: IconButton(
-        onPressed: openProfile,
+        onPressed:
+            openProfile,
         icon: const Icon(
           Icons.person_outline,
           color: Colors.white,
         ),
-        tooltip: 'Profile',
+        tooltip:
+            'Profile',
       ),
     );
   }
 
-  // =====================================================
+  // ==========================================================
   // TOOLS GRID
-  // =====================================================
+  // ==========================================================
 
   Widget _buildToolsGrid() {
     return GridView.count(
@@ -334,37 +438,45 @@ class _HomePageState extends State<HomePage>
         HomeToolCard(
           icon:
               Icons.qr_code_scanner,
-          title: 'QR Scanner',
+          title:
+              'QR Scanner',
           subtitle:
               'Scan QR codes',
-          onTap: openQrTools,
+          onTap:
+              openQrTools,
         ),
 
         HomeToolCard(
           icon:
               Icons.note_alt_outlined,
-          title: 'Notes',
+          title:
+              'Notes',
           subtitle:
               'Create notes',
-          onTap: openNotes,
+          onTap:
+              openNotes,
         ),
 
         HomeToolCard(
           icon:
               Icons.picture_as_pdf_outlined,
-          title: 'PDF & Images',
+          title:
+              'PDF & Images',
           subtitle:
               'Manage files',
-          onTap: openPdfImages,
+          onTap:
+              openPdfImages,
         ),
 
         HomeToolCard(
           icon:
               Icons.record_voice_over_outlined,
-          title: 'Text / Voice',
+          title:
+              'Text / Voice',
           subtitle:
               'Convert document',
-          onTap: openImageToText,
+          onTap:
+              openImageToText,
         ),
       ],
     );

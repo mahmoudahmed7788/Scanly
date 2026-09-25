@@ -20,14 +20,14 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(
         flutterEngine: FlutterEngine
     ) {
-        super.configureFlutterEngine(flutterEngine)
+        super.configureFlutterEngine(
+            flutterEngine
+        )
 
-        // Register Tesseract OCR plugin
         flutterEngine.plugins.add(
             TesseractOcrPlugin()
         )
 
-        // Scanly Share Channel
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             SHARE_CHANNEL
@@ -35,17 +35,26 @@ class MainActivity : FlutterActivity() {
 
             when (call.method) {
 
+                // =====================================================
+                // SHARE TO SPECIFIC APP
+                // =====================================================
+
                 "shareToApp" -> {
 
                     val filePath =
-                        call.argument<String>("filePath")
+                        call.argument<String>(
+                            "filePath"
+                        )
 
                     val packageNames =
-                        call.argument<List<String>>("packageNames")
+                        call.argument<List<String>>(
+                            "packageNames"
+                        )
 
                     val text =
-                        call.argument<String>("text")
-                            ?: "QR Code generated with Scanly"
+                        call.argument<String>(
+                            "text"
+                        ) ?: "QR Code generated with Scanly"
 
                     if (
                         filePath == null ||
@@ -56,62 +65,94 @@ class MainActivity : FlutterActivity() {
                             "Missing share data",
                             null
                         )
+
                         return@setMethodCallHandler
                     }
 
                     try {
 
-                        val uri = getQrUri(filePath)
+                        val uri =
+                            getQrUri(
+                                filePath
+                            )
 
-                        var selectedPackage: String? = null
+                        var selectedPackage:
+                            String? = null
 
-                        for (packageName in packageNames) {
+                        for (
+                            packageName
+                            in packageNames
+                        ) {
 
-                            if (isAppInstalled(packageName)) {
-                                selectedPackage = packageName
+                            if (
+                                isAppInstalled(
+                                    packageName
+                                )
+                            ) {
+                                selectedPackage =
+                                    packageName
+
                                 break
                             }
                         }
 
-                        if (selectedPackage == null) {
-                            result.success(false)
+                        if (
+                            selectedPackage ==
+                            null
+                        ) {
+                            result.success(
+                                false
+                            )
+
                             return@setMethodCallHandler
                         }
 
-                        val intent = Intent(
-                            Intent.ACTION_SEND
-                        ).apply {
+                        val intent =
+                            Intent(
+                                Intent.ACTION_SEND
+                            ).apply {
 
-                            type = "image/png"
+                                type =
+                                    "image/png"
 
-                            putExtra(
-                                Intent.EXTRA_STREAM,
-                                uri
-                            )
+                                putExtra(
+                                    Intent.EXTRA_STREAM,
+                                    uri
+                                )
 
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                text
-                            )
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    text
+                                )
 
-                            setPackage(selectedPackage)
+                                setPackage(
+                                    selectedPackage
+                                )
 
-                            addFlags(
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            )
-                        }
+                                addFlags(
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                )
+                            }
 
-                        startActivity(intent)
+                        startActivity(
+                            intent
+                        )
 
-                        result.success(true)
+                        result.success(
+                            true
+                        )
 
                     } catch (
                         e: ActivityNotFoundException
                     ) {
 
-                        result.success(false)
+                        result.success(
+                            false
+                        )
 
-                    } catch (e: Exception) {
+                    } catch (
+                        e: Exception
+                    ) {
 
                         result.error(
                             "SHARE_ERROR",
@@ -121,44 +162,61 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                // =====================================================
+                // SHARE MORE
+                // =====================================================
+
                 "shareMore" -> {
 
                     val filePath =
-                        call.argument<String>("filePath")
+                        call.argument<String>(
+                            "filePath"
+                        )
 
                     val text =
-                        call.argument<String>("text")
-                            ?: "QR Code generated with Scanly"
+                        call.argument<String>(
+                            "text"
+                        ) ?: "QR Code generated with Scanly"
 
-                    if (filePath == null) {
-                        result.success(false)
+                    if (
+                        filePath == null
+                    ) {
+                        result.success(
+                            false
+                        )
+
                         return@setMethodCallHandler
                     }
 
                     try {
 
-                        val uri = getQrUri(filePath)
-
-                        val intent = Intent(
-                            Intent.ACTION_SEND
-                        ).apply {
-
-                            type = "image/png"
-
-                            putExtra(
-                                Intent.EXTRA_STREAM,
-                                uri
+                        val uri =
+                            getQrUri(
+                                filePath
                             )
 
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                text
-                            )
+                        val intent =
+                            Intent(
+                                Intent.ACTION_SEND
+                            ).apply {
 
-                            addFlags(
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            )
-                        }
+                                type =
+                                    "image/png"
+
+                                putExtra(
+                                    Intent.EXTRA_STREAM,
+                                    uri
+                                )
+
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    text
+                                )
+
+                                addFlags(
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                )
+                            }
 
                         val chooser =
                             Intent.createChooser(
@@ -166,11 +224,17 @@ class MainActivity : FlutterActivity() {
                                 "Share QR Code"
                             )
 
-                        startActivity(chooser)
+                        startActivity(
+                            chooser
+                        )
 
-                        result.success(true)
+                        result.success(
+                            true
+                        )
 
-                    } catch (e: Exception) {
+                    } catch (
+                        e: Exception
+                    ) {
 
                         result.error(
                             "SHARE_ERROR",
@@ -180,28 +244,40 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                // =====================================================
+                // SAVE QR
+                // =====================================================
+
                 "saveQrToGallery" -> {
 
                     val filePath =
-                        call.argument<String>("filePath")
+                        call.argument<String>(
+                            "filePath"
+                        )
 
                     val fileName =
-                        call.argument<String>("fileName")
+                        call.argument<String>(
+                            "fileName"
+                        )
                             ?: "Scanly_QR_${System.currentTimeMillis()}.png"
 
-                    if (filePath == null) {
+                    if (
+                        filePath == null
+                    ) {
+
                         result.error(
                             "INVALID_DATA",
                             "Missing QR file path",
                             null
                         )
+
                         return@setMethodCallHandler
                     }
 
                     try {
 
                         val savedUri =
-                            saveQrToGallery(
+                            saveQrToScanlyFolder(
                                 filePath,
                                 fileName
                             )
@@ -210,10 +286,86 @@ class MainActivity : FlutterActivity() {
                             savedUri.toString()
                         )
 
-                    } catch (e: Exception) {
+                    } catch (
+                        e: Exception
+                    ) {
 
                         result.error(
                             "SAVE_ERROR",
+                            e.message,
+                            null
+                        )
+                    }
+                }
+
+                // =====================================================
+                // SAVE ANY FILE TO:
+                //
+                // Documents/Scanly/<folder>/
+                // =====================================================
+
+                "saveFileToScanly" -> {
+
+                    val filePath =
+                        call.argument<String>(
+                            "filePath"
+                        )
+
+                    val fileName =
+                        call.argument<String>(
+                            "fileName"
+                        )
+
+                    val mimeType =
+                        call.argument<String>(
+                            "mimeType"
+                        )
+                            ?: "application/octet-stream"
+
+                    val folder =
+                        call.argument<String>(
+                            "folder"
+                        )
+                            ?: "Documents"
+
+                    if (
+                        filePath == null ||
+                        fileName == null
+                    ) {
+
+                        result.error(
+                            "INVALID_DATA",
+                            "Missing file data",
+                            null
+                        )
+
+                        return@setMethodCallHandler
+                    }
+
+                    try {
+
+                        val savedUri =
+                            saveFileToScanlyFolder(
+                                filePath =
+                                    filePath,
+                                fileName =
+                                    fileName,
+                                mimeType =
+                                    mimeType,
+                                folder =
+                                    folder
+                            )
+
+                        result.success(
+                            savedUri.toString()
+                        )
+
+                    } catch (
+                        e: Exception
+                    ) {
+
+                        result.error(
+                            "SAVE_FILE_ERROR",
                             e.message,
                             null
                         )
@@ -226,6 +378,10 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
+
+    // =========================================================
+    // CHECK APP INSTALLED
+    // =========================================================
 
     private fun isAppInstalled(
         packageName: String
@@ -248,13 +404,19 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // =========================================================
+    // GET FILE PROVIDER URI
+    // =========================================================
+
     private fun getQrUri(
         filePath: String
     ): Uri {
 
-        val file = File(filePath)
+        val file =
+            File(filePath)
 
         if (!file.exists()) {
+
             throw Exception(
                 "QR image file does not exist"
             )
@@ -267,81 +429,142 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private fun saveQrToGallery(
+    // =========================================================
+    // SAVE QR
+    // =========================================================
+
+    private fun saveQrToScanlyFolder(
         filePath: String,
         fileName: String
     ): Uri {
 
-        val sourceFile = File(filePath)
+        return saveFileToScanlyFolder(
+            filePath =
+                filePath,
+            fileName =
+                fileName,
+            mimeType =
+                "image/png",
+            folder =
+                "QR Codes"
+        )
+    }
+
+    // =========================================================
+    // SAVE FILE TO:
+    //
+    // Documents/Scanly/<folder>/
+    // =========================================================
+
+    private fun saveFileToScanlyFolder(
+        filePath: String,
+        fileName: String,
+        mimeType: String,
+        folder: String
+    ): Uri {
+
+        val sourceFile =
+            File(filePath)
 
         if (!sourceFile.exists()) {
+
             throw Exception(
-                "QR image file does not exist"
+                "Source file does not exist"
             )
         }
 
-        val resolver = contentResolver
+        val resolver =
+            contentResolver
 
-        val values = ContentValues().apply {
+        // =====================================================
+        // ANDROID 10+
+        // =====================================================
 
-            put(
-                MediaStore.Images.Media.DISPLAY_NAME,
-                fileName
-            )
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.Q
+        ) {
 
-            put(
-                MediaStore.Images.Media.MIME_TYPE,
-                "image/png"
-            )
+            val safeFolder =
+                folder
+                    .trim()
+                    .replace(
+                        "/",
+                        "_"
+                    )
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val relativePath =
+                "Documents/Scanly/$safeFolder/"
 
-                put(
-                    MediaStore.Images.Media.RELATIVE_PATH,
-                    "Pictures/Scanly Images"
-                )
+            val values =
+                ContentValues().apply {
 
-                put(
-                    MediaStore.Images.Media.IS_PENDING,
-                    1
-                )
-            }
-        }
+                    put(
+                        MediaStore.Files.FileColumns.DISPLAY_NAME,
+                        fileName
+                    )
 
-        val uri =
-            resolver.insert(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                values
-            )
-                ?: throw Exception(
-                    "Could not create gallery file"
-                )
+                    put(
+                        MediaStore.Files.FileColumns.MIME_TYPE,
+                        mimeType
+                    )
 
-        try {
+                    put(
+                        MediaStore.Files.FileColumns.RELATIVE_PATH,
+                        relativePath
+                    )
 
-            resolver.openOutputStream(uri).use { outputStream ->
-
-                if (outputStream == null) {
-                    throw Exception(
-                        "Could not open gallery output stream"
+                    put(
+                        MediaStore.Files.FileColumns.IS_PENDING,
+                        1
                     )
                 }
 
-                sourceFile.inputStream().use { inputStream ->
+            val collection =
+                MediaStore.Files.getContentUri(
+                    MediaStore.VOLUME_EXTERNAL_PRIMARY
+                )
 
-                    inputStream.copyTo(
-                        outputStream
+            val uri =
+                resolver.insert(
+                    collection,
+                    values
+                )
+                    ?: throw Exception(
+                        "Could not create Scanly file"
                     )
-                }
-            }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+
+                resolver
+                    .openOutputStream(uri)
+                    .use { outputStream ->
+
+                        if (
+                            outputStream ==
+                            null
+                        ) {
+
+                            throw Exception(
+                                "Could not open output stream"
+                            )
+                        }
+
+                        sourceFile
+                            .inputStream()
+                            .use { inputStream ->
+
+                                inputStream.copyTo(
+                                    outputStream
+                                )
+                            }
+                    }
 
                 val completedValues =
                     ContentValues().apply {
 
                         put(
-                            MediaStore.Images.Media.IS_PENDING,
+                            MediaStore.Files.FileColumns.IS_PENDING,
                             0
                         )
                     }
@@ -352,19 +575,69 @@ class MainActivity : FlutterActivity() {
                     null,
                     null
                 )
+
+                return uri
+
+            } catch (
+                e: Exception
+            ) {
+
+                resolver.delete(
+                    uri,
+                    null,
+                    null
+                )
+
+                throw e
             }
+        }
 
-            return uri
+        // =====================================================
+        // ANDROID 9 AND BELOW
+        // =====================================================
 
-        } catch (e: Exception) {
+        val documentsDirectory =
+            android.os.Environment
+                .getExternalStoragePublicDirectory(
+                    android.os.Environment
+                        .DIRECTORY_DOCUMENTS
+                )
 
-            resolver.delete(
-                uri,
-                null,
-                null
+        val scanlyDirectory =
+            File(
+                documentsDirectory,
+                "Scanly/$folder"
             )
 
-            throw e
+        if (
+            !scanlyDirectory.exists()
+        ) {
+
+            scanlyDirectory.mkdirs()
         }
+
+        val destinationFile =
+            File(
+                scanlyDirectory,
+                fileName
+            )
+
+        sourceFile
+            .inputStream()
+            .use { inputStream ->
+
+                destinationFile
+                    .outputStream()
+                    .use { outputStream ->
+
+                        inputStream.copyTo(
+                            outputStream
+                        )
+                    }
+            }
+
+        return Uri.fromFile(
+            destinationFile
+        )
     }
 }
