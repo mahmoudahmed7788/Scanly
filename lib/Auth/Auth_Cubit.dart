@@ -1,7 +1,3 @@
-// ============================================================
-// AUTH CUBIT - MAIN
-// ============================================================
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -15,43 +11,26 @@ part 'Auth_Social.dart';
 part 'Auth_Account.dart';
 part 'Auth_Utilities.dart';
 
-// ============================================================
-// AUTH CUBIT
-// ============================================================
-
 class AuthCubit extends Cubit<AuthState> {
   AuthCubit()
       : super(
           AuthState(
-            status:
-                FirebaseAuth.instance.currentUser != null
-                    ? AuthStatus.success
-                    : AuthStatus.initial,
+            status: FirebaseAuth.instance.currentUser != null
+                ? AuthStatus.success
+                : AuthStatus.initial,
             user: FirebaseAuth.instance.currentUser,
           ),
         ) {
     _listenToAuthChanges();
   }
 
-  // ============================================================
-  // DEPENDENCIES
-  // ============================================================
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  final FirebaseAuth _auth =
-      FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
-  final GoogleSignIn _googleSignIn =
-      GoogleSignIn.instance;
-
-  // ============================================================
-  // GOOGLE INITIALIZATION
-  // ============================================================
-
-  late final Future<void>
-      _googleSignInInitialization =
+  late final Future<void> _googleSignInInitialization =
       _initializeGoogleSignIn();
 
   Future<void> _initializeGoogleSignIn() async {
@@ -61,17 +40,9 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
-  // ============================================================
-  // CURRENT USER
-  // ============================================================
-
   User? get currentUser {
     return _auth.currentUser;
   }
-
-  // ============================================================
-  // AUTH STATE LISTENER
-  // ============================================================
 
   void _listenToAuthChanges() {
     _auth.authStateChanges().listen((user) {
@@ -91,10 +62,6 @@ class AuthCubit extends Cubit<AuthState> {
       }
     });
   }
-
-  // ============================================================
-  // CLOSE
-  // ============================================================
 
   @override
   Future<void> close() {

@@ -16,58 +16,31 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // ============================================================
-  // CONTROLLERS
-  // ============================================================
-
   final TextEditingController emailController =
       TextEditingController();
 
   final TextEditingController passwordController =
       TextEditingController();
 
-  // ============================================================
-  // FORM
-  // ============================================================
-
   final GlobalKey<FormState> formKey =
       GlobalKey<FormState>();
 
-  // ============================================================
-  // UI STATE
-  // ============================================================
-
   bool obscurePassword = true;
-
   bool isGoogleLoading = false;
-
   bool isFacebookLoading = false;
-
   bool isSocialLogin = false;
-
-  // ============================================================
-  // LIFECYCLE
-  // ============================================================
+  bool isForgotPasswordLoading = false;
 
   @override
   void dispose() {
     emailController.dispose();
     passwordController.dispose();
-
     super.dispose();
   }
-
-  // ============================================================
-  // GETTERS
-  // ============================================================
 
   bool get isSocialLoading {
     return isGoogleLoading || isFacebookLoading;
   }
-
-  // ============================================================
-  // EMAIL LOGIN
-  // ============================================================
 
   Future<void> login() async {
     if (!formKey.currentState!.validate()) {
@@ -84,10 +57,6 @@ class _LoginPageState extends State<LoginPage> {
         );
   }
 
-  // ============================================================
-  // GOOGLE LOGIN
-  // ============================================================
-
   Future<void> loginWithGoogle() async {
     if (isSocialLoading) {
       return;
@@ -99,28 +68,7 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final authCubit = context.read<AuthCubit>();
-
-      await authCubit.signInWithGoogle();
-
-      if (!mounted) {
-        return;
-      }
-
-      final User? user =
-          FirebaseAuth.instance.currentUser;
-
-      debugPrint(
-        'LOGIN PAGE GOOGLE USER: ${user?.email}',
-      );
-
-      if (user != null) {
-        debugPrint(
-          'LOGIN PAGE GOOGLE: Going to Home',
-        );
-
-        context.go('/home');
-      }
+      await context.read<AuthCubit>().signInWithGoogle();
     } catch (e) {
       debugPrint(
         'LOGIN PAGE GOOGLE ERROR: $e',
@@ -131,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       _showSnackBar(
-        'Google login failed: $e',
+        'Google login failed. Please try again.',
         isError: true,
       );
     } finally {
@@ -145,10 +93,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // ============================================================
-  // FACEBOOK LOGIN
-  // ============================================================
-
   Future<void> loginWithFacebook() async {
     if (isSocialLoading) {
       return;
@@ -160,28 +104,7 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final authCubit = context.read<AuthCubit>();
-
-      await authCubit.signInWithFacebook();
-
-      if (!mounted) {
-        return;
-      }
-
-      final User? user =
-          FirebaseAuth.instance.currentUser;
-
-      debugPrint(
-        'LOGIN PAGE FACEBOOK USER: ${user?.email}',
-      );
-
-      if (user != null) {
-        debugPrint(
-          'LOGIN PAGE FACEBOOK: Going to Home',
-        );
-
-        context.go('/home');
-      }
+      await context.read<AuthCubit>().signInWithFacebook();
     } catch (e) {
       debugPrint(
         'LOGIN PAGE FACEBOOK ERROR: $e',
@@ -192,7 +115,7 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       _showSnackBar(
-        'Facebook login failed: $e',
+        'Facebook login failed. Please try again.',
         isError: true,
       );
     } finally {
@@ -206,18 +129,17 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // ============================================================
-  // FORGOT PASSWORD
-  // ============================================================
-
   Future<void> forgotPassword() async {
+    if (isForgotPasswordLoading) {
+      return;
+    }
+
     final email = emailController.text.trim();
 
     if (email.isEmpty) {
       _showSnackBar(
         'Please enter your email first.',
       );
-
       return;
     }
 
@@ -225,32 +147,63 @@ class _LoginPageState extends State<LoginPage> {
       _showSnackBar(
         'Please enter a valid email address.',
       );
-
       return;
     }
 
-    await context
-        .read<AuthCubit>()
-        .sendPasswordResetEmail(email);
+    setState(() {
+      isForgotPasswordLoading = true;
+    });
 
-    if (!mounted) {
-      return;
-    }
+    try {
+      final authCubit = context.read<AuthCubit>();
 
-    final state =
-        context.read<AuthCubit>().state;
+      await authCubit.sendPasswordResetEmail(email);
 
-    if (state.status == AuthStatus.success) {
-      context.push(
-        '/forgot-password-verification',
-        extra: email,
+      if (!mounted) {
+        return;
+      }
+
+      final authState = authCubit.state;
+
+      if (authState.status == AuthStatus.success) {
+        context.push(
+          '/forgot-password-verification',
+          extra: email,
+        );
+
+        return;
+      }
+
+      if (authState.status == AuthStatus.failure) {
+        _showSnackBar(
+          authState.errorMessage ??
+              'Unable to send password reset email.',
+          isError: true,
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        'FORGOT PASSWORD ERROR: $e',
       );
+
+      if (!mounted) {
+        return;
+      }
+
+      _showSnackBar(
+        'Unable to send password reset email.',
+        isError: true,
+      );
+    } finally {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        isForgotPasswordLoading = false;
+      });
     }
   }
-
-  // ============================================================
-  // EMAIL VALIDATION
-  // ============================================================
 
   bool _isValidEmail(String email) {
     final emailRegex = RegExp(
@@ -260,27 +213,15 @@ class _LoginPageState extends State<LoginPage> {
     return emailRegex.hasMatch(email);
   }
 
-  // ============================================================
-  // PASSWORD VISIBILITY
-  // ============================================================
-
   void togglePasswordVisibility() {
     setState(() {
       obscurePassword = !obscurePassword;
     });
   }
 
-  // ============================================================
-  // THEME
-  // ============================================================
-
   Future<void> toggleTheme() async {
     await ThemeController.toggleTheme();
   }
-
-  // ============================================================
-  // SNACKBAR
-  // ============================================================
 
   void _showSnackBar(
     String message, {
@@ -299,31 +240,96 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // ============================================================
-  // AUTH STATE LISTENER
-  // ============================================================
+  Future<void> _showWrongPasswordDialog() async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Row(
+            children: [
+              Icon(
+                Icons.lock_outline_rounded,
+                color: Colors.redAccent,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Wrong Password',
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'The password you entered is incorrect. '
+            'You can reset your password and try again.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+
+                forgotPassword();
+              },
+              child: const Text(
+                'Forgot Password?',
+                style: TextStyle(
+                  color: Color(0xFF5B5FEF),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   void _handleAuthState(
     BuildContext context,
     AuthState state,
   ) {
+    if (state.status == AuthStatus.notRegistered) {
+      _showSnackBar(
+        'This account is not registered. Please create an account first.',
+        isError: true,
+      );
+
+      Future.delayed(
+        const Duration(milliseconds: 700),
+        () {
+          if (!mounted) {
+            return;
+          }
+
+          context.go('/register');
+        },
+      );
+
+      return;
+    }
+
     if (state.status == AuthStatus.success &&
         state.user != null) {
-      final user = state.user!;
-
-      // --------------------------------------------------------
-      // GOOGLE / FACEBOOK
-      // --------------------------------------------------------
+      final User user = state.user!;
 
       if (isSocialLogin) {
         context.go('/home');
-
         return;
       }
-
-      // --------------------------------------------------------
-      // EMAIL LOGIN
-      // --------------------------------------------------------
 
       if (user.emailVerified) {
         context.go('/home');
@@ -335,6 +341,14 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     if (state.status == AuthStatus.failure) {
+      final errorCode = state.errorCode;
+
+      if (errorCode == 'wrong-password' ||
+          errorCode == 'invalid-credential') {
+        _showWrongPasswordDialog();
+        return;
+      }
+
       _showSnackBar(
         state.errorMessage ??
             'Authentication failed.',
@@ -342,10 +356,6 @@ class _LoginPageState extends State<LoginPage> {
       );
     }
   }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -393,19 +403,20 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     children: [
                       const SizedBox(height: 55),
-
                       const LoginHeader(),
-
                       const SizedBox(height: 30),
-
                       LoginForm(
                         formKey: formKey,
                         emailController: emailController,
-                        passwordController: passwordController,
-                        obscurePassword: obscurePassword,
-                        isSocialLoading: isSocialLoading,
+                        passwordController:
+                            passwordController,
+                        obscurePassword:
+                            obscurePassword,
+                        isSocialLoading:
+                            isSocialLoading,
                         textPrimary: textPrimary,
-                        textSecondary: textSecondary,
+                        textSecondary:
+                            textSecondary,
                         cardColor: cardColor,
                         onTogglePassword:
                             togglePasswordVisibility,
@@ -415,13 +426,15 @@ class _LoginPageState extends State<LoginPage> {
                         onRegister: () {
                           context.push('/register');
                         },
+                        onGoogle:
+                            loginWithGoogle,
+                        onFacebook:
+                            loginWithFacebook,
                       ),
-
                       const SizedBox(height: 20),
                     ],
                   ),
                 ),
-
                 LoginThemeButton(
                   onToggleTheme: toggleTheme,
                 ),

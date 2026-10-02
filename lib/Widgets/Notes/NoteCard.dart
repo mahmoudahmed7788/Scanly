@@ -9,6 +9,9 @@ class NoteCard extends StatelessWidget {
   final VoidCallback onTogglePin;
   final VoidCallback onDelete;
   final VoidCallback onShare;
+  final VoidCallback onToggleFavorite;
+
+  final bool isFavorite;
 
   final Future<bool> Function() onSwipeDelete;
 
@@ -20,20 +23,20 @@ class NoteCard extends StatelessWidget {
     required this.onTogglePin,
     required this.onDelete,
     required this.onShare,
-    required this.onSwipeDelete, required Future<void> Function(NoteModel note) onPin, required Future<void> Function(NoteModel note) onOpen, required String Function(NoteModel note) previewText,
+    required this.onToggleFavorite,
+    required this.isFavorite,
+    required this.onSwipeDelete,
+    required Future<void> Function(NoteModel note) onPin,
+    required Future<void> Function(NoteModel note) onOpen,
+    required String Function(NoteModel note) previewText,
   });
 
   String _formatDate(DateTime date) {
-    final hour =
-        date.hour % 12 == 0
-            ? 12
-            : date.hour % 12;
+    final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
 
-    final minute =
-        date.minute.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
 
-    final period =
-        date.hour >= 12 ? 'PM' : 'AM';
+    final period = date.hour >= 12 ? 'PM' : 'AM';
 
     return '${date.day}/${date.month}/${date.year} • '
         '$hour:$minute $period';
@@ -41,106 +44,56 @@ class NoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).colorScheme;
+    final colors = Theme.of(context).colorScheme;
 
-    final noteColor =
-        Color(note.colorValue);
+    final noteColor = Color(note.colorValue);
 
     final dark =
-        ThemeData.estimateBrightnessForColor(
-              noteColor,
-            ) ==
-            Brightness.dark;
+        ThemeData.estimateBrightnessForColor(noteColor) == Brightness.dark;
 
-    final primaryText =
-        dark
-            ? Colors.white
-            : const Color(0xFF24213D);
+    final primaryText = dark ? Colors.white : const Color(0xFF24213D);
 
-    final secondaryText =
-        dark
-            ? Colors.white70
-            : const Color(0xFF69647E);
+    final secondaryText = dark ? Colors.white70 : const Color(0xFF69647E);
 
     return Dismissible(
-      key: ValueKey(
-        'note_${note.id}',
-      ),
-
-      direction:
-          DismissDirection.endToStart,
-
+      key: ValueKey('note_${note.id}'),
+      direction: DismissDirection.endToStart,
       background: Container(
-        margin:
-            const EdgeInsets.only(
-          bottom: 12,
-        ),
-        padding:
-            const EdgeInsets.only(
-          right: 20,
-        ),
-        alignment:
-            Alignment.centerRight,
-        decoration:
-            BoxDecoration(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.only(right: 20),
+        alignment: Alignment.centerRight,
+        decoration: BoxDecoration(
           color: colors.error,
-          borderRadius:
-              BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(18),
         ),
         child: const Icon(
           Icons.delete_outline_rounded,
           color: Colors.white,
         ),
       ),
-
       confirmDismiss: (_) async {
         return await onSwipeDelete();
       },
-
       child: GestureDetector(
         onTap: onTap,
-
         child: Container(
-          margin:
-              const EdgeInsets.only(
-            bottom: 12,
-          ),
-          padding:
-              const EdgeInsets.all(16),
-
-          decoration:
-              BoxDecoration(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
             color: noteColor,
-            borderRadius:
-                BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color:
-                  colors.outline.withValues(
-                alpha: .08,
-              ),
+              color: colors.outline.withValues(alpha: .08),
             ),
           ),
-
           child: Row(
             children: [
-              // ==================================================
-              // NOTE ICON
-              // ==================================================
-
               Container(
                 width: 44,
                 height: 44,
-                decoration:
-                    BoxDecoration(
-                  color: primaryText
-                      .withValues(
-                    alpha: .10,
-                  ),
-                  borderRadius:
-                      BorderRadius.circular(
-                    14,
-                  ),
+                decoration: BoxDecoration(
+                  color: primaryText.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   Icons.note_alt_outlined,
@@ -148,19 +101,10 @@ class NoteCard extends StatelessWidget {
                   size: 23,
                 ),
               ),
-
-              const SizedBox(
-                width: 13,
-              ),
-
-              // ==================================================
-              // NOTE INFO
-              // ==================================================
-
+              const SizedBox(width: 13),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
@@ -170,128 +114,75 @@ class NoteCard extends StatelessWidget {
                                 ? 'Untitled Note'
                                 : note.title,
                             maxLines: 1,
-                            overflow:
-                                TextOverflow.ellipsis,
-                            style:
-                                TextStyle(
-                              color:
-                                  primaryText,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: primaryText,
                               fontSize: 16,
-                              fontWeight:
-                                  FontWeight.w700,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
-
                         if (note.isPinned)
                           Padding(
-                            padding:
-                                const EdgeInsets
-                                    .only(
-                              left: 8,
-                            ),
+                            padding: const EdgeInsets.only(left: 8),
                             child: Icon(
-                              Icons
-                                  .push_pin_rounded,
+                              Icons.push_pin_rounded,
                               size: 18,
-                              color:
-                                  primaryText,
+                              color: primaryText,
                             ),
                           ),
                       ],
                     ),
-
-                    const SizedBox(
-                      height: 5,
-                    ),
-
+                    const SizedBox(height: 5),
                     Text(
                       'Tap to open this note',
                       maxLines: 2,
-                      overflow:
-                          TextOverflow.ellipsis,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: secondaryText,
                         fontSize: 12,
                       ),
                     ),
-
-                    const SizedBox(
-                      height: 9,
-                    ),
-
-                    // ==================================================
-                    // META
-                    // ==================================================
-
+                    const SizedBox(height: 9),
                     Row(
                       children: [
                         Icon(
-                          Icons
-                              .schedule_rounded,
+                          Icons.schedule_rounded,
                           size: 14,
-                          color:
-                              secondaryText,
+                          color: secondaryText,
                         ),
-
-                        const SizedBox(
-                          width: 4,
-                        ),
-
+                        const SizedBox(width: 4),
                         Text(
-                          _formatDate(
-                            note.updatedAt,
-                          ),
-                          style:
-                              TextStyle(
+                          _formatDate(note.updatedAt),
+                          style: TextStyle(
                             fontSize: 11,
-                            color:
-                                secondaryText,
-                            fontWeight:
-                                FontWeight.w500,
+                            color: secondaryText,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-
-                        if (note.imagePaths
-                            .isNotEmpty) ...[
-                          const SizedBox(
-                            width: 10,
-                          ),
+                        if (note.imagePaths.isNotEmpty) ...[
+                          const SizedBox(width: 10),
                           Icon(
-                            Icons
-                                .image_outlined,
+                            Icons.image_outlined,
                             size: 16,
-                            color:
-                                secondaryText,
+                            color: secondaryText,
                           ),
                         ],
-
-                        if (note.pdfs
-                            .isNotEmpty) ...[
-                          const SizedBox(
-                            width: 8,
-                          ),
+                        if (note.pdfs.isNotEmpty) ...[
+                          const SizedBox(width: 8),
                           Icon(
-                            Icons
-                                .picture_as_pdf_outlined,
+                            Icons.picture_as_pdf_outlined,
                             size: 16,
-                            color:
-                                secondaryText,
+                            color: secondaryText,
                           ),
                         ],
-
-                        if (note.pages.length >
-                            1) ...[
-                          const SizedBox(
-                            width: 8,
-                          ),
+                        if (note.pages.length > 1) ...[
+                          const SizedBox(width: 8),
                           Text(
                             '${note.pages.length} pages',
-                            style:
-                                TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color:
-                                  secondaryText,
+                              color: secondaryText,
                             ),
                           ),
                         ],
@@ -300,131 +191,95 @@ class NoteCard extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // ==================================================
-              // MENU
-              // ==================================================
-
+              IconButton(
+                tooltip: isFavorite
+                    ? 'Remove from favorites'
+                    : 'Add to favorites',
+                onPressed: onToggleFavorite,
+                icon: Icon(
+                  isFavorite
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: isFavorite ? Colors.redAccent : primaryText,
+                  size: 23,
+                ),
+              ),
               PopupMenuButton<String>(
                 icon: Icon(
                   Icons.more_vert_rounded,
                   color: primaryText,
                 ),
-
                 onSelected: (value) {
                   switch (value) {
                     case 'edit':
                       onEdit();
                       break;
-
                     case 'pin':
                       onTogglePin();
                       break;
-
                     case 'share':
                       onShare();
                       break;
-
                     case 'delete':
                       onDelete();
                       break;
                   }
                 },
-
                 itemBuilder: (_) => [
-                  // ------------------------------------------------
-                  // EDIT
-                  // ------------------------------------------------
-
                   const PopupMenuItem(
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 20,
-                        ),
-                        SizedBox(
-                          width: 8,
-                        ),
+                        Icon(Icons.edit_outlined, size: 20),
+                        SizedBox(width: 8),
                         Text('Edit'),
                       ],
                     ),
                   ),
-
-                  // ------------------------------------------------
-                  // PIN
-                  // ------------------------------------------------
-
                   PopupMenuItem(
                     value: 'pin',
                     child: Row(
                       children: [
                         Icon(
                           note.isPinned
-                              ? Icons
-                                  .push_pin_outlined
-                              : Icons
-                                  .push_pin_rounded,
+                              ? Icons.push_pin_outlined
+                              : Icons.push_pin_rounded,
                           size: 20,
                         ),
-                        const SizedBox(
-                          width: 8,
-                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          note.isPinned
-                              ? 'Unpin'
-                              : 'Pin',
+                          note.isPinned ? 'Unpin' : 'Pin',
                         ),
                       ],
                     ),
                   ),
-
-                  // ------------------------------------------------
-                  // SHARE
-                  // ------------------------------------------------
-
                   const PopupMenuItem(
                     value: 'share',
                     child: Row(
                       children: [
                         Icon(
-                          Icons
-                              .ios_share_rounded,
+                          Icons.ios_share_rounded,
                           size: 20,
                         ),
-                        SizedBox(
-                          width: 8,
-                        ),
+                        SizedBox(width: 8),
                         Text('Share'),
                       ],
                     ),
                   ),
-
-                  // ------------------------------------------------
-                  // DELETE
-                  // ------------------------------------------------
-
                   PopupMenuItem(
                     value: 'delete',
                     child: Row(
                       children: [
                         Icon(
-                          Icons
-                              .delete_outline_rounded,
+                          Icons.delete_outline_rounded,
                           size: 20,
-                          color:
-                              colors.error,
+                          color: colors.error,
                         ),
-                        const SizedBox(
-                          width: 8,
-                        ),
+                        const SizedBox(width: 8),
                         Text(
                           'Delete',
-                          style:
-                              TextStyle(
-                            color:
-                                colors.error,
+                          style: TextStyle(
+                            color: colors.error,
                           ),
                         ),
                       ],

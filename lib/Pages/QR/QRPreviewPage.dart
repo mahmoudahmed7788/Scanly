@@ -7,11 +7,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:scanly/Core/ScanlyActivityService.dart';
 import 'package:scanly/Core/Scanly_Items.dart';
 import 'package:scanly/Pages/QR/QR_Share_Sheet.dart';
 import 'package:scanly/Widgets/Qr/QRPreviewActions.dart';
 import 'package:scanly/Widgets/Qr/QRPreviewCard.dart';
-import 'package:scanly/core/ScanlyActivityService.dart';
 
 import 'QRPreviewUtils.dart';
 
@@ -24,8 +24,7 @@ class QRPreviewPage extends StatefulWidget {
   });
 
   @override
-  State<QRPreviewPage> createState() =>
-      _QRPreviewPageState();
+  State<QRPreviewPage> createState() => _QRPreviewPageState();
 }
 
 class _QRPreviewPageState extends State<QRPreviewPage> {
@@ -57,8 +56,7 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       type: 'qr',
       route: '/qr-tools',
       data: widget.value,
-      createdAt:
-          DateTime.now().millisecondsSinceEpoch,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
     );
   }
 
@@ -68,26 +66,20 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     );
   }
 
-  // =====================================================
-  // SYNC FAVORITE STATE
-  // =====================================================
-
   void _onGlobalActivityChanged() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     setState(() {});
   }
-
-  // =====================================================
-  // TOGGLE FAVORITE
-  // =====================================================
 
   Future<void> _toggleFavorite() async {
     final currentlyFavorite = _isFavorite;
 
     if (currentlyFavorite) {
       await ScanlyActivityService.removeFavorite(
-        _itemId,
+        _scanlyItem,
       );
 
       if (mounted) {
@@ -112,19 +104,11 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     }
   }
 
-  // =====================================================
-  // RECENT
-  // =====================================================
-
   Future<void> _createRecentIfNeeded() async {
     await ScanlyActivityService.addRecent(
       _scanlyItem,
     );
   }
-
-  // =====================================================
-  // CREATE QR IMAGE
-  // =====================================================
 
   Future<String?> _createQRImage() async {
     try {
@@ -169,10 +153,6 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       return null;
     }
   }
-
-  // =====================================================
-  // SAVE QR
-  // =====================================================
 
   Future<void> _saveQR() async {
     if (_isSaving || _isSharing) {
@@ -229,10 +209,6 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     }
   }
 
-  // =====================================================
-  // SHARE TO APP
-  // =====================================================
-
   Future<void> _shareTo(
     List<String> packageNames,
   ) async {
@@ -265,8 +241,7 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
         {
           'filePath': imagePath,
           'packageNames': packageNames,
-          'text':
-              'QR Code generated with Scanly',
+          'text': 'Shared with Scanly',
         },
       );
 
@@ -285,8 +260,7 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       );
 
       _showMessage(
-        e.message ??
-            'Could not share QR Code',
+        e.message ?? 'Could not share QR Code',
       );
     } catch (e) {
       debugPrint(
@@ -305,10 +279,6 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     }
   }
 
-  // =====================================================
-  // SHARE MORE
-  // =====================================================
-
   Future<void> _shareMore() async {
     if (widget.value.isEmpty) {
       _showMessage(
@@ -317,11 +287,16 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       return;
     }
 
+    setState(() {
+      _isSharing = true;
+    });
+
     try {
       final imagePath =
           await _createQRImage();
 
-      if (imagePath == null) {
+      if (imagePath == null ||
+          imagePath.isEmpty) {
         _showMessage(
           'QR Code is not ready yet',
         );
@@ -332,8 +307,7 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
         'shareMore',
         {
           'filePath': imagePath,
-          'text':
-              'QR Code generated with Scanly',
+          'text': 'Shared with Scanly',
         },
       );
     } on PlatformException catch (e) {
@@ -342,8 +316,7 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       );
 
       _showMessage(
-        e.message ??
-            'Could not share QR Code',
+        e.message ?? 'Could not share QR Code',
       );
     } catch (e) {
       debugPrint(
@@ -353,12 +326,14 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       _showMessage(
         'Could not share QR Code',
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSharing = false;
+        });
+      }
     }
   }
-
-  // =====================================================
-  // SHARE SHEET
-  // =====================================================
 
   void _showShareSheet() {
     if (_isSaving || _isSharing) {
@@ -372,10 +347,6 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     );
   }
 
-  // =====================================================
-  // COPY
-  // =====================================================
-
   Future<void> _copyValue() async {
     await Clipboard.setData(
       ClipboardData(
@@ -388,27 +359,20 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
     );
   }
 
-  // =====================================================
-  // MESSAGE
-  // =====================================================
-
   void _showMessage(String message) {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          behavior:
-              SnackBarBehavior.floating,
+          behavior: SnackBarBehavior.floating,
         ),
       );
   }
-
-  // =====================================================
-  // INIT
-  // =====================================================
 
   @override
   void initState() {
@@ -418,29 +382,21 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
       _onGlobalActivityChanged,
     );
 
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) {
-      _createRecentIfNeeded();
-    });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) {
+        _createRecentIfNeeded();
+      },
+    );
   }
-
-  // =====================================================
-  // DISPOSE
-  // =====================================================
 
   @override
   void dispose() {
-    ScanlyActivityService.version
-        .removeListener(
+    ScanlyActivityService.version.removeListener(
       _onGlobalActivityChanged,
     );
 
     super.dispose();
   }
-
-  // =====================================================
-  // BUILD
-  // =====================================================
 
   @override
   Widget build(BuildContext context) {
@@ -489,34 +445,26 @@ class _QRPreviewPageState extends State<QRPreviewPage> {
                     .textTheme
                     .headlineMedium,
               ),
-
               const SizedBox(height: 6),
-
               Text(
                 'Preview, save or share your QR Code',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color:
-                      colors.onSurfaceVariant,
+                  color: colors.onSurfaceVariant,
                 ),
               ),
-
               const SizedBox(height: 24),
-
               QRPreviewCard(
                 qrKey: _qrKey,
                 value: widget.value,
                 onCopy: _copyValue,
               ),
-
               const SizedBox(height: 16),
-
               QRPreviewActions(
                 isFavorite: favorite,
                 isSaving: _isSaving,
                 isSharing: _isSharing,
-                onToggleFavorite:
-                    _toggleFavorite,
+                onToggleFavorite: _toggleFavorite,
                 onSave: _saveQR,
                 onShare: _showShareSheet,
               ),

@@ -4,15 +4,6 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 class AdService {
   AdService._();
 
-  // ============================================================
-  // TEST AD UNIT IDS
-  // ============================================================
-  //
-  // IMPORTANT:
-  // These are Google test IDs.
-  // Replace them with your real AdMob IDs before release.
-  //
-
   static const String _androidInterstitialTestId =
       'ca-app-pub-3940256099942544/1033173712';
 
@@ -25,17 +16,9 @@ class AdService {
   static const String _iosRewardedTestId =
       'ca-app-pub-3940256099942544/1712485313';
 
-  // ============================================================
-  // ADS
-  // ============================================================
-
   static InterstitialAd? _interstitialAd;
 
   static RewardedAd? _rewardedAd;
-
-  // ============================================================
-  // STATE
-  // ============================================================
 
   static bool _isLoadingInterstitial = false;
 
@@ -43,24 +26,9 @@ class AdService {
 
   static bool _isShowingAd = false;
 
-  // ============================================================
-  // INTERSTITIAL COUNTER
-  // ============================================================
-  //
-  // We don't show an interstitial after every action.
-  //
-  // Example:
-  // Every 3 eligible actions.
-  //
-
   static int _interstitialActionCount = 0;
 
-  static const int _interstitialEvery =
-      3;
-
-  // ============================================================
-  // INITIALIZE
-  // ============================================================
+  static const int _interstitialEvery = 3;
 
   static Future<void> initialize() async {
     try {
@@ -75,10 +43,6 @@ class AdService {
     }
   }
 
-  // ============================================================
-  // INTERSTITIAL AD UNIT
-  // ============================================================
-
   static String get _interstitialAdUnitId {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return _iosInterstitialTestId;
@@ -87,10 +51,6 @@ class AdService {
     return _androidInterstitialTestId;
   }
 
-  // ============================================================
-  // REWARDED AD UNIT
-  // ============================================================
-
   static String get _rewardedAdUnitId {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return _iosRewardedTestId;
@@ -98,10 +58,6 @@ class AdService {
 
     return _androidRewardedTestId;
   }
-
-  // ============================================================
-  // LOAD INTERSTITIAL
-  // ============================================================
 
   static void _loadInterstitial() {
     if (_isLoadingInterstitial) {
@@ -117,8 +73,7 @@ class AdService {
     InterstitialAd.load(
       adUnitId: _interstitialAdUnitId,
       request: const AdRequest(),
-      adLoadCallback:
-          InterstitialAdLoadCallback(
+      adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (
           InterstitialAd ad,
         ) {
@@ -146,10 +101,6 @@ class AdService {
     );
   }
 
-  // ============================================================
-  // SHOW INTERSTITIAL
-  // ============================================================
-
   static Future<bool> showInterstitial({
     bool force = false,
   }) async {
@@ -157,19 +108,11 @@ class AdService {
       return false;
     }
 
-    /*
-     * If force is false:
-     *
-     * We count eligible actions.
-     * The ad only appears every few actions.
-     */
-
     if (!force) {
       _interstitialActionCount++;
 
-      if (
-          _interstitialActionCount <
-              _interstitialEvery) {
+      if (_interstitialActionCount <
+          _interstitialEvery) {
         _loadInterstitial();
         return false;
       }
@@ -188,7 +131,21 @@ class AdService {
 
     _isShowingAd = true;
 
-    bool dismissed = false;
+    bool completed = false;
+
+    final completion = Future<void>.delayed(
+      const Duration(days: 1),
+    );
+
+    void finishAd() {
+      if (completed) {
+        return;
+      }
+
+      completed = true;
+      _isShowingAd = false;
+      _loadInterstitial();
+    }
 
     ad.fullScreenContentCallback =
         FullScreenContentCallback(
@@ -208,11 +165,7 @@ class AdService {
 
         ad.dispose();
 
-        _isShowingAd = false;
-
-        _loadInterstitial();
-
-        dismissed = true;
+        finishAd();
       },
       onAdFailedToShowFullScreenContent: (
         InterstitialAd ad,
@@ -225,9 +178,7 @@ class AdService {
 
         ad.dispose();
 
-        _isShowingAd = false;
-
-        _loadInterstitial();
+        finishAd();
       },
       onAdClicked: (
         InterstitialAd ad,
@@ -248,14 +199,9 @@ class AdService {
     try {
       ad.show();
 
-      /*
-       * Give the ad lifecycle callbacks a chance
-       * to run before returning.
-       */
-
       await Future<void>.delayed(
         const Duration(
-          milliseconds: 300,
+          milliseconds: 100,
         ),
       );
 
@@ -267,17 +213,35 @@ class AdService {
 
       ad.dispose();
 
-      _isShowingAd = false;
-
-      _loadInterstitial();
+      finishAd();
 
       return false;
     }
   }
 
-  // ============================================================
-  // LOAD REWARDED
-  // ============================================================
+  static Future<void> _waitForInterstitialToFinish() async {
+    while (_isShowingAd) {
+      await Future<void>.delayed(
+        const Duration(
+          milliseconds: 100,
+        ),
+      );
+    }
+  }
+
+  static Future<bool> showInterstitialBeforeAction() async {
+    final shouldShow =
+        _interstitialActionCount + 1 >=
+            _interstitialEvery;
+
+    final shown = await showInterstitial();
+
+    if (shown && shouldShow) {
+      await _waitForInterstitialToFinish();
+    }
+
+    return shown;
+  }
 
   static void _loadRewarded() {
     if (_isLoadingRewarded) {
@@ -321,16 +285,6 @@ class AdService {
       ),
     );
   }
-
-  // ============================================================
-  // REWARDED AD
-  // ============================================================
-  //
-  // Returns:
-  //
-  // true  = user earned the reward
-  // false = user did not earn it / ad unavailable
-  //
 
   static Future<bool> showRewarded() async {
     if (_isShowingAd) {
@@ -440,26 +394,14 @@ class AdService {
     }
   }
 
-  // ============================================================
-  // PRELOAD
-  // ============================================================
-
   static void preload() {
     _loadInterstitial();
     _loadRewarded();
   }
 
-  // ============================================================
-  // RESET
-  // ============================================================
-
   static void resetCounter() {
     _interstitialActionCount = 0;
   }
-
-  // ============================================================
-  // STATUS
-  // ============================================================
 
   static bool get isInterstitialReady =>
       _interstitialAd != null;

@@ -6,9 +6,10 @@ import 'package:scanly/Core/Scanly_Items.dart';
 import 'package:scanly/Models/DocumentModel.dart';
 import 'package:scanly/core/ScanlyActivityService.dart';
 
-
 class HomeActivitySections extends StatefulWidget {
-  const HomeActivitySections({super.key});
+  const HomeActivitySections({
+    super.key,
+  });
 
   @override
   State<HomeActivitySections> createState() =>
@@ -26,7 +27,7 @@ class _HomeActivitySectionsState
 
     ScanlyActivityService.version.addListener(_refresh);
 
-    _loadDocuments();
+    _initialize();
   }
 
   @override
@@ -38,25 +39,36 @@ class _HomeActivitySectionsState
     super.dispose();
   }
 
+  Future<void> _initialize() async {
+    await ScanlyActivityService.init();
+    await _loadDocuments();
+  }
+
   @override
   void didChangeAppLifecycleState(
     AppLifecycleState state,
   ) {
     if (state == AppLifecycleState.resumed) {
-      _loadDocuments();
+      _initialize();
     }
   }
 
   void _refresh() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     setState(() {});
   }
 
   Future<void> _loadDocuments() async {
-    await DocumentStorage.syncFromDisk();
+    try {
+      await DocumentStorage.syncFromDisk();
+    } catch (_) {}
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     setState(() {});
   }
@@ -73,25 +85,20 @@ class _HomeActivitySectionsState
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
-      valueListenable:
-          ScanlyActivityService.version,
+      valueListenable: ScanlyActivityService.version,
       builder: (
         context,
         _,
         __,
       ) {
-        final favorites =
-            ScanlyActivityService.favoritePreview;
+        final favorites = ScanlyActivityService.favorites;
 
-        final recent =
-            ScanlyActivityService.recentPreview;
+        final recent = ScanlyActivityService.recent;
 
-        final favoriteDocuments =
-            _favoriteDocuments();
+        final favoriteDocuments = _favoriteDocuments();
 
         return Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SectionHeader(
               title: 'Favorites',
@@ -100,16 +107,12 @@ class _HomeActivitySectionsState
                 context.push('/favorites');
               },
             ),
-
             const SizedBox(height: 14),
-
             _FavoritesList(
               items: favorites,
               documents: favoriteDocuments,
             ),
-
             const SizedBox(height: 32),
-
             _SectionHeader(
               title: 'Recent',
               icon: Icons.history_rounded,
@@ -117,9 +120,7 @@ class _HomeActivitySectionsState
                 context.push('/recent');
               },
             ),
-
             const SizedBox(height: 14),
-
             _ActivityList(
               items: recent,
               emptyIcon: Icons.history_rounded,
@@ -134,10 +135,6 @@ class _HomeActivitySectionsState
   }
 }
 
-// ============================================================
-// SECTION HEADER
-// ============================================================
-
 class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -151,8 +148,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).colorScheme;
+    final colors = Theme.of(context).colorScheme;
 
     return Row(
       children: [
@@ -161,8 +157,7 @@ class _SectionHeader extends StatelessWidget {
           height: 36,
           decoration: BoxDecoration(
             color: colors.primary.withOpacity(0.10),
-            borderRadius:
-                BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(11),
           ),
           child: Icon(
             icon,
@@ -170,9 +165,7 @@ class _SectionHeader extends StatelessWidget {
             size: 19,
           ),
         ),
-
         const SizedBox(width: 10),
-
         Expanded(
           child: Text(
             title,
@@ -183,18 +176,15 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
         ),
-
         TextButton(
           onPressed: onViewAll,
           style: TextButton.styleFrom(
-            padding:
-                const EdgeInsets.symmetric(
+            padding: const EdgeInsets.symmetric(
               horizontal: 7,
               vertical: 4,
             ),
             minimumSize: Size.zero,
-            tapTargetSize:
-                MaterialTapTargetSize.shrinkWrap,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: Text(
             'View All',
@@ -210,10 +200,6 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ============================================================
-// FAVORITES LIST
-// ============================================================
-
 class _FavoritesList extends StatelessWidget {
   final List<ScanlyItem> items;
   final List<DocumentModel> documents;
@@ -225,13 +211,11 @@ class _FavoritesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty &&
-        documents.isEmpty) {
+    if (items.isEmpty && documents.isEmpty) {
       return const _EmptyActivity(
         icon: Icons.favorite_border_rounded,
         title: 'No Favorites Yet',
-        subtitle:
-            'Your favorite items will appear here.',
+        subtitle: 'Your favorite items will appear here.',
       );
     }
 
@@ -240,8 +224,7 @@ class _FavoritesList extends StatelessWidget {
         (item) => _FavoriteEntry.item(item),
       ),
       ...documents.map(
-        (document) =>
-            _FavoriteEntry.document(document),
+        (document) => _FavoriteEntry.document(document),
       ),
     ];
 
@@ -249,11 +232,9 @@ class _FavoritesList extends StatelessWidget {
       height: 102,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        physics:
-            const BouncingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         itemCount: entries.length,
-        separatorBuilder: (_, __) =>
-            const SizedBox(width: 12),
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (
           context,
           index,
@@ -288,12 +269,7 @@ class _FavoriteEntry {
   ) : item = null;
 }
 
-// ============================================================
-// FAVORITE ITEM CARD
-// ============================================================
-
-class _FavoriteItemCard
-    extends StatelessWidget {
+class _FavoriteItemCard extends StatelessWidget {
   final ScanlyItem item;
 
   const _FavoriteItemCard({
@@ -306,8 +282,7 @@ class _FavoriteItemCard
       title: item.title,
       type: _displayType(item.type),
       icon: _iconForType(item.type),
-      dateTime:
-          _extractItemDateTime(item),
+      dateTime: _extractItemDateTime(item),
       onTap: () {
         ScanlyItemOpener.open(
           context,
@@ -318,12 +293,7 @@ class _FavoriteItemCard
   }
 }
 
-// ============================================================
-// FAVORITE DOCUMENT CARD
-// ============================================================
-
-class _FavoriteDocumentCard
-    extends StatelessWidget {
+class _FavoriteDocumentCard extends StatelessWidget {
   final DocumentModel document;
 
   const _FavoriteDocumentCard({
@@ -333,13 +303,9 @@ class _FavoriteDocumentCard
   Future<void> _openDocument(
     BuildContext context,
   ) async {
-    if (!context.mounted) return;
-
-    // =======================================================
-    // IMPORTANT:
-    // Router expects DocumentModel in state.extra.
-    // Do NOT send a Map here.
-    // =======================================================
+    if (!context.mounted) {
+      return;
+    }
 
     await context.push(
       '/pdf-preview',
@@ -353,10 +319,7 @@ class _FavoriteDocumentCard
       title: document.title,
       type: _displayType(document.type),
       icon: _iconForType(document.type),
-      dateTime:
-          _extractDocumentDateTime(
-        document,
-      ),
+      dateTime: _extractDocumentDateTime(document),
       onTap: () {
         _openDocument(context);
       },
@@ -364,12 +327,7 @@ class _FavoriteDocumentCard
   }
 }
 
-// ============================================================
-// RECENT LIST
-// ============================================================
-
-class _ActivityList
-    extends StatelessWidget {
+class _ActivityList extends StatelessWidget {
   final List<ScanlyItem> items;
   final IconData emptyIcon;
   final String emptyTitle;
@@ -396,11 +354,9 @@ class _ActivityList
       height: 102,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        physics:
-            const BouncingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         itemCount: items.length,
-        separatorBuilder: (_, __) =>
-            const SizedBox(width: 12),
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (
           context,
           index,
@@ -411,8 +367,7 @@ class _ActivityList
             title: item.title,
             type: _displayType(item.type),
             icon: _iconForType(item.type),
-            dateTime:
-                _extractItemDateTime(item),
+            dateTime: _extractItemDateTime(item),
             onTap: () {
               ScanlyItemOpener.open(
                 context,
@@ -426,12 +381,7 @@ class _ActivityList
   }
 }
 
-// ============================================================
-// ACTIVITY CARD
-// ============================================================
-
-class _ActivityCard
-    extends StatelessWidget {
+class _ActivityCard extends StatelessWidget {
   final String title;
   final String type;
   final IconData icon;
@@ -448,11 +398,8 @@ class _ActivityCard
 
   @override
   Widget build(BuildContext context) {
-    final theme =
-        Theme.of(context);
-
-    final colors =
-        theme.colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     return SizedBox(
       width: 285,
@@ -460,35 +407,28 @@ class _ActivityCard
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius:
-              BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(20),
           child: Ink(
             decoration: BoxDecoration(
               color: colors.surface,
-              borderRadius:
-                  BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: colors.outlineVariant
-                    .withOpacity(0.35),
+                color: colors.outlineVariant.withOpacity(0.35),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: colors.onSurface
-                      .withOpacity(
-                    theme.brightness ==
-                            Brightness.dark
+                  color: colors.onSurface.withOpacity(
+                    theme.brightness == Brightness.dark
                         ? 0.10
                         : 0.045,
                   ),
                   blurRadius: 14,
-                  offset:
-                      const Offset(0, 5),
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(
+              padding: const EdgeInsets.symmetric(
                 horizontal: 13,
                 vertical: 12,
               ),
@@ -497,102 +437,66 @@ class _ActivityCard
                   _TypeIcon(
                     icon: icon,
                   ),
-
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: Column(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           title.trim().isEmpty
                               ? 'Untitled'
                               : title,
                           maxLines: 1,
-                          overflow:
-                              TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color:
-                                colors.onSurface,
+                            color: colors.onSurface,
                             fontSize: 14,
-                            fontWeight:
-                                FontWeight.w800,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-
                         const SizedBox(height: 5),
-
                         Row(
                           children: [
                             Container(
-                              padding:
-                                  const EdgeInsets
-                                      .symmetric(
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: 7,
                                 vertical: 3,
                               ),
-                              decoration:
-                                  BoxDecoration(
-                                color: colors
-                                    .primary
-                                    .withOpacity(
-                                  0.09,
-                                ),
-                                borderRadius:
-                                    BorderRadius
-                                        .circular(7),
+                              decoration: BoxDecoration(
+                                color: colors.primary.withOpacity(0.09),
+                                borderRadius: BorderRadius.circular(7),
                               ),
                               child: Text(
                                 type,
                                 maxLines: 1,
-                                overflow:
-                                    TextOverflow
-                                        .ellipsis,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color:
-                                      colors.primary,
+                                  color: colors.primary,
                                   fontSize: 10,
-                                  fontWeight:
-                                      FontWeight.w700,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
-
                             const SizedBox(width: 7),
-
                             Expanded(
                               child: Row(
                                 children: [
                                   Icon(
-                                    Icons
-                                        .access_time_rounded,
+                                    Icons.access_time_rounded,
                                     size: 12,
-                                    color: colors
-                                        .onSurfaceVariant,
+                                    color: colors.onSurfaceVariant,
                                   ),
-
-                                  const SizedBox(
-                                    width: 3,
-                                  ),
-
+                                  const SizedBox(width: 3),
                                   Expanded(
                                     child: Text(
                                       dateTime,
                                       maxLines: 1,
-                                      overflow:
-                                          TextOverflow
-                                              .ellipsis,
-                                      style:
-                                          TextStyle(
-                                        color: colors
-                                            .onSurfaceVariant,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: colors.onSurfaceVariant,
                                         fontSize: 10,
-                                        fontWeight:
-                                            FontWeight
-                                                .w600,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ),
@@ -604,23 +508,17 @@ class _ActivityCard
                       ],
                     ),
                   ),
-
                   const SizedBox(width: 6),
-
                   Container(
                     width: 28,
                     height: 28,
-                    decoration:
-                        BoxDecoration(
-                      color: colors.primary
-                          .withOpacity(0.07),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withOpacity(0.07),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      Icons
-                          .chevron_right_rounded,
-                      color:
-                          colors.primary,
+                      Icons.chevron_right_rounded,
+                      color: colors.primary,
                       size: 18,
                     ),
                   ),
@@ -634,12 +532,7 @@ class _ActivityCard
   }
 }
 
-// ============================================================
-// TYPE ICON
-// ============================================================
-
-class _TypeIcon
-    extends StatelessWidget {
+class _TypeIcon extends StatelessWidget {
   final IconData icon;
 
   const _TypeIcon({
@@ -648,27 +541,21 @@ class _TypeIcon
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).colorScheme;
+    final colors = Theme.of(context).colorScheme;
 
     return Container(
       width: 54,
       height: 54,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin:
-              Alignment.topLeft,
-          end:
-              Alignment.bottomRight,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [
-            colors.primary
-                .withOpacity(0.14),
-            colors.secondary
-                .withOpacity(0.08),
+            colors.primary.withOpacity(0.14),
+            colors.secondary.withOpacity(0.08),
           ],
         ),
-        borderRadius:
-            BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Icon(
         icon,
@@ -679,12 +566,7 @@ class _TypeIcon
   }
 }
 
-// ============================================================
-// EMPTY ACTIVITY
-// ============================================================
-
-class _EmptyActivity
-    extends StatelessWidget {
+class _EmptyActivity extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -697,25 +579,19 @@ class _EmptyActivity
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).colorScheme;
+    final colors = Theme.of(context).colorScheme;
 
     return Container(
       width: double.infinity,
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 18,
         vertical: 17,
       ),
-      decoration:
-          BoxDecoration(
+      decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius:
-            BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: colors
-              .outlineVariant
-              .withOpacity(0.35),
+          color: colors.outlineVariant.withOpacity(0.35),
         ),
       ),
       child: Row(
@@ -723,12 +599,9 @@ class _EmptyActivity
           Container(
             width: 50,
             height: 50,
-            decoration:
-                BoxDecoration(
-              color: colors.primary
-                  .withOpacity(0.10),
-              borderRadius:
-                  BorderRadius.circular(15),
+            decoration: BoxDecoration(
+              color: colors.primary.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(15),
             ),
             child: Icon(
               icon,
@@ -736,32 +609,24 @@ class _EmptyActivity
               size: 24,
             ),
           ),
-
           const SizedBox(width: 13),
-
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
                   style: TextStyle(
-                    color:
-                        colors.onSurface,
+                    color: colors.onSurface,
                     fontSize: 14,
-                    fontWeight:
-                        FontWeight.w800,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color:
-                        colors.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                     fontSize: 12,
                   ),
                 ),
@@ -774,13 +639,8 @@ class _EmptyActivity
   }
 }
 
-// ============================================================
-// TYPE
-// ============================================================
-
 String _displayType(String type) {
-  final normalized =
-      type.trim().toLowerCase();
+  final normalized = type.trim().toLowerCase();
 
   switch (normalized) {
     case 'qr':
@@ -812,15 +672,12 @@ String _displayType(String type) {
       return 'Text';
 
     default:
-      return type.trim().isEmpty
-          ? 'Item'
-          : type.trim();
+      return type.trim().isEmpty ? 'Item' : type.trim();
   }
 }
 
 IconData _iconForType(String type) {
-  final normalized =
-      type.trim().toLowerCase();
+  final normalized = type.trim().toLowerCase();
 
   switch (normalized) {
     case 'qr':
@@ -856,10 +713,6 @@ IconData _iconForType(String type) {
   }
 }
 
-// ============================================================
-// DATE / TIME
-// ============================================================
-
 String _formatDateTime(dynamic value) {
   if (value == null) {
     return 'Recently';
@@ -879,20 +732,14 @@ String _formatDateTime(dynamic value) {
     final number = int.tryParse(text);
 
     if (number != null) {
-      date =
-          _timestampToDateTime(number);
+      date = _timestampToDateTime(number);
     } else {
-      date =
-          DateTime.tryParse(text);
+      date = DateTime.tryParse(text);
     }
   } else if (value is int) {
-    date =
-        _timestampToDateTime(value);
+    date = _timestampToDateTime(value);
   } else if (value is double) {
-    date =
-        _timestampToDateTime(
-      value.toInt(),
-    );
+    date = _timestampToDateTime(value.toInt());
   }
 
   if (date == null) {
@@ -914,26 +761,15 @@ String _formatDateTime(dynamic value) {
     local.day,
   );
 
-  final difference =
-      today.difference(itemDay).inDays;
+  final difference = today.difference(itemDay).inDays;
 
-  final hour =
-      local.hour % 12 == 0
-          ? 12
-          : local.hour % 12;
+  final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
 
-  final minute =
-      local.minute
-          .toString()
-          .padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
 
-  final period =
-      local.hour >= 12
-          ? 'PM'
-          : 'AM';
+  final period = local.hour >= 12 ? 'PM' : 'AM';
 
-  final time =
-      '$hour:$minute $period';
+  final time = '$hour:$minute $period';
 
   if (difference == 0) {
     return 'Today • $time';
@@ -943,48 +779,28 @@ String _formatDateTime(dynamic value) {
     return 'Yesterday • $time';
   }
 
-  if (difference > 1 &&
-      difference < 7) {
+  if (difference > 1 && difference < 7) {
     return '${_weekday(local.weekday)} • $time';
   }
 
-  final day =
-      local.day
-          .toString()
-          .padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
 
-  final month =
-      local.month
-          .toString()
-          .padLeft(2, '0');
+  final month = local.month.toString().padLeft(2, '0');
 
   return '$day/$month/${local.year} • $time';
 }
 
-// ============================================================
-// TIMESTAMP CONVERTER
-// ============================================================
-
 DateTime _timestampToDateTime(
   int timestamp,
 ) {
-  if (timestamp.abs() >=
-      100000000000) {
-    return DateTime
-        .fromMillisecondsSinceEpoch(
-      timestamp,
-    );
+  if (timestamp.abs() >= 100000000000) {
+    return DateTime.fromMillisecondsSinceEpoch(timestamp);
   }
 
-  return DateTime
-      .fromMillisecondsSinceEpoch(
+  return DateTime.fromMillisecondsSinceEpoch(
     timestamp * 1000,
   );
 }
-
-// ============================================================
-// WEEKDAY
-// ============================================================
 
 String _weekday(int day) {
   switch (day) {
@@ -1014,58 +830,14 @@ String _weekday(int day) {
   }
 }
 
-// ============================================================
-// DOCUMENT DATE
-// ============================================================
-
 String _extractDocumentDateTime(
   DocumentModel document,
 ) {
-  return _formatDateTime(
-    document.date,
-  );
+  return _formatDateTime(document.date);
 }
-
-// ============================================================
-// SCANLY ITEM DATE
-// ============================================================
 
 String _extractItemDateTime(
   ScanlyItem item,
 ) {
-  final dynamic rawItem = item;
-
-  try {
-    final value = rawItem.dateTime;
-
-    if (value != null) {
-      return _formatDateTime(value);
-    }
-  } catch (_) {}
-
-  try {
-    final value = rawItem.date;
-
-    if (value != null) {
-      return _formatDateTime(value);
-    }
-  } catch (_) {}
-
-  try {
-    final value = rawItem.createdAt;
-
-    if (value != null) {
-      return _formatDateTime(value);
-    }
-  } catch (_) {}
-
-  try {
-    final value = rawItem.openedAt;
-
-    if (value != null) {
-      return _formatDateTime(value);
-    }
-  } catch (_) {}
-
-  return 'Recently';
+  return _formatDateTime(item.createdAt);
 }

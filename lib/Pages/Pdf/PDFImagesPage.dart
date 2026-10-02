@@ -23,34 +23,19 @@ class PDFImagesPage extends StatefulWidget {
       _PDFImagesPageState();
 }
 
-class _PDFImagesPageState
-    extends State<PDFImagesPage> {
-  // ============================================================
-  // CONTROLLERS
-  // ============================================================
-
-  final ImagePicker _picker =
-      ImagePicker();
+class _PDFImagesPageState extends State<PDFImagesPage> {
+  final ImagePicker _picker = ImagePicker();
 
   final List<XFile> _selectedImages = [];
 
-  final TextEditingController
-      _nameController =
+  final TextEditingController _nameController =
       TextEditingController(
     text: 'Scanly Document',
   );
 
-  // ============================================================
-  // STATE
-  // ============================================================
-
   bool _isCreating = false;
 
   Uint8List? _scanlyLogoBytes;
-
-  // ============================================================
-  // INIT
-  // ============================================================
 
   @override
   void initState() {
@@ -59,10 +44,6 @@ class _PDFImagesPageState
     _loadScanlyLogo();
   }
 
-  // ============================================================
-  // DISPOSE
-  // ============================================================
-
   @override
   void dispose() {
     _nameController.dispose();
@@ -70,14 +51,9 @@ class _PDFImagesPageState
     super.dispose();
   }
 
-  // ============================================================
-  // LOAD LOGO
-  // ============================================================
-
   Future<void> _loadScanlyLogo() async {
     try {
-      final data =
-          await rootBundle.load(
+      final data = await rootBundle.load(
         'assets/images/Scanly_Splash.png',
       );
 
@@ -86,8 +62,7 @@ class _PDFImagesPageState
       }
 
       setState(() {
-        _scanlyLogoBytes =
-            data.buffer.asUint8List();
+        _scanlyLogoBytes = data.buffer.asUint8List();
       });
     } catch (e) {
       debugPrint(
@@ -96,18 +71,13 @@ class _PDFImagesPageState
     }
   }
 
-  // ============================================================
-  // PICK IMAGES
-  // ============================================================
-
   Future<void> _pickImages() async {
     if (_isCreating) {
       return;
     }
 
     try {
-      final images =
-          await _picker.pickMultiImage();
+      final images = await _picker.pickMultiImage();
 
       if (images.isEmpty) {
         return;
@@ -136,13 +106,7 @@ class _PDFImagesPageState
     }
   }
 
-  // ============================================================
-  // REMOVE IMAGE
-  // ============================================================
-
-  void _removeImage(
-    int index,
-  ) {
+  void _removeImage(int index) {
     if (_isCreating) {
       return;
     }
@@ -156,10 +120,6 @@ class _PDFImagesPageState
       _selectedImages.removeAt(index);
     });
   }
-
-  // ============================================================
-  // REORDER IMAGES
-  // ============================================================
 
   void _moveImage(
     int oldIndex,
@@ -185,9 +145,7 @@ class _PDFImagesPageState
       }
 
       final image =
-          _selectedImages.removeAt(
-        oldIndex,
-      );
+          _selectedImages.removeAt(oldIndex);
 
       _selectedImages.insert(
         newIndex,
@@ -196,13 +154,7 @@ class _PDFImagesPageState
     });
   }
 
-  // ============================================================
-  // CLEAN FILE NAME
-  // ============================================================
-
-  String _cleanFileName(
-    String value,
-  ) {
+  String _cleanFileName(String value) {
     var name = value.trim();
 
     if (name.isEmpty) {
@@ -229,10 +181,6 @@ class _PDFImagesPageState
 
     return name;
   }
-
-  // ============================================================
-  // CREATE PDF
-  // ============================================================
 
   Future<void> _createPdf() async {
     if (_isCreating) {
@@ -274,10 +222,6 @@ class _PDFImagesPageState
         logoBytes: _scanlyLogoBytes,
       );
 
-      // ========================================================
-      // ACTIVITY ITEM
-      // ========================================================
-
       final filePath =
           scanlyDocument.filePath!;
 
@@ -290,28 +234,13 @@ class _PDFImagesPageState
         fileName: fileName,
       );
 
-      // ========================================================
-      // BACKGROUND SAVE
-      // ========================================================
-
-      unawaited(
-        PDFGeneratorService
-            .finishBackgroundSave(
-          document: scanlyDocument,
-          item: item,
-          fileName: fileName,
-        ),
+      await PDFGeneratorService.finishBackgroundSave(
+        document: scanlyDocument,
+        item: item,
+        fileName: fileName,
       );
 
-      // ========================================================
-      // INTERSTITIAL AD
-      // ========================================================
-
       await AdService.showInterstitial();
-
-      // ========================================================
-      // OPEN PREVIEW
-      // ========================================================
 
       if (!mounted) {
         return;
@@ -355,10 +284,6 @@ class _PDFImagesPageState
       }
     }
   }
-
-  // ============================================================
-  // MESSAGE
-  // ============================================================
 
   void _showMessage(
     String message,
@@ -411,22 +336,14 @@ class _PDFImagesPageState
       );
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
-
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     final colors =
-        Theme.of(context)
-            .colorScheme;
+        Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor:
           colors.surfaceContainerLowest,
-
       appBar: AppBar(
         title: const Text(
           'Image to PDF',
@@ -436,10 +353,8 @@ class _PDFImagesPageState
           ),
         ),
       ),
-
       resizeToAvoidBottomInset:
           true,
-
       body: Column(
         children: [
           PDFTopSection(
@@ -455,7 +370,6 @@ class _PDFImagesPageState
             onCreatePdf:
                 _createPdf,
           ),
-
           Expanded(
             child:
                 _selectedImages.isEmpty

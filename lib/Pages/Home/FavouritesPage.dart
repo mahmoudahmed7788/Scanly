@@ -3,13 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scanly/Core/DocumentStorage.dart';
+import 'package:scanly/Core/ScanlyActivityService.dart';
 import 'package:scanly/Core/Scanly_Items.dart';
+import 'package:scanly/Core/ScanlyItemOpener.dart';
 import 'package:scanly/Models/DocumentModel.dart';
+import 'package:scanly/Service/Ads/AdService.dart';
 import 'package:scanly/Widgets/Favourites/favorite_document_card.dart';
 import 'package:scanly/Widgets/Favourites/favorite_item_card.dart';
 import 'package:scanly/Widgets/Favourites/favorites_empty_state.dart';
 import 'package:scanly/Widgets/Favourites/favorites_utils.dart';
-import 'package:scanly/core/ScanlyActivityService.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -26,18 +28,9 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     WidgetsBinding.instance.addObserver(this);
 
-    // Listen to ALL Scanly activity changes.
-    //
-    // This means:
-    // QR Favorite added
-    // QR Favorite removed
-    // Normal Favorite added
-    // Normal Favorite removed
-    //
-    // will immediately refresh this page.
     ScanlyActivityService.version.addListener(_refresh);
 
-    _loadDocuments();
+    _loadData();
   }
 
   @override
@@ -49,20 +42,12 @@ class _FavoritesPageState extends State<FavoritesPage>
     super.dispose();
   }
 
-  // ============================================================
-  // APP LIFECYCLE
-  // ============================================================
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _loadDocuments();
+      _loadData();
     }
   }
-
-  // ============================================================
-  // REFRESH
-  // ============================================================
 
   void _refresh() {
     if (!mounted) {
@@ -72,11 +57,17 @@ class _FavoritesPageState extends State<FavoritesPage>
     setState(() {});
   }
 
-  Future<void> _loadDocuments() async {
+  Future<void> _loadData() async {
+    try {
+      await ScanlyActivityService.init();
+    } catch (e) {
+      debugPrint('Favorites activity sync error: $e');
+    }
+
     try {
       await DocumentStorage.syncFromDisk();
     } catch (e) {
-      debugPrint('Favorites sync error: $e');
+      debugPrint('Favorites document sync error: $e');
     }
 
     if (!mounted) {
@@ -86,54 +77,60 @@ class _FavoritesPageState extends State<FavoritesPage>
     setState(() {});
   }
 
-  // ============================================================
-  // FAVORITES
-  // ============================================================
-
   List<DocumentModel> _favoriteDocuments() {
     return FavoritesUtils.favoriteDocuments();
   }
 
-  /// Main source of truth for all non-PDF favorites.
-  ///
-  /// QR Favorites are included here automatically because
-  /// QR items are stored as ScanlyItem with:
-  ///
-  /// type: 'qr'
-  ///
-  /// No separate QR SharedPreferences is used anymore.
   List<ScanlyItem> get _favorites {
     return ScanlyActivityService.favorites;
   }
 
-  // ============================================================
-  // OPEN SCANLY ITEM
-  // ============================================================
-
-  Future<void> _openItem(ScanlyItem item) async {
-    // Opening a favorite also makes it a Recent item.
-    await ScanlyActivityService.addRecent(item);
-
-    if (!mounted) {
-      return;
-    }
-
-    if (item.route.isNotEmpty) {
-      await context.push(item.route, extra: item.data);
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    await _loadDocuments();
+  List<ScanlyItem> get _noteFavorites {
+    return _favorites.where((item) => item.type == 'note').toList();
   }
 
-  // ============================================================
-  // OPEN PDF DOCUMENT
-  // ============================================================
+  List<ScanlyItem> get _qrFavorites {
+    return _favorites.where((item) => item.type == 'qr').toList();
+  }
+
+  List<ScanlyItem> get _imageToTextFavorites {
+    return _favorites.where((item) => item.type == 'image_to_text').toList();
+  }
+
+  List<ScanlyItem> get _otherFavorites {
+    return _favorites
+        .where(
+          (item) =>
+              item.type != 'note' &&
+              item.type != 'qr' &&
+              item.type != 'image_to_text',
+        )
+        .toList();
+  }
+
+  Future<void> _openItem(ScanlyItem item) async {
+    await AdService.showInterstitialBeforeAction();
+
+    if (!mounted) {
+      return;
+    }
+
+    await ScanlyItemOpener.open(context, item);
+
+    if (!mounted) {
+      return;
+    }
+
+    await _loadData();
+  }
 
   Future<void> _openDocument(DocumentModel document) async {
+    await AdService.showInterstitialBeforeAction();
+
+    if (!mounted) {
+      return;
+    }
+
     await DocumentStorage.markAsOpened(document);
 
     if (!mounted) {
@@ -152,8 +149,7 @@ class _FavoritesPageState extends State<FavoritesPage>
     if (!await file.exists()) {
       _showMessage('PDF file no longer exists');
 
-      await _loadDocuments();
-
+      await _loadData();
       return;
     }
 
@@ -164,40 +160,24 @@ class _FavoritesPageState extends State<FavoritesPage>
       return;
     }
 
-    await context.push(
-      '/pdf-preview',
-      extra: {
-        'pdfBytes': bytes,
-        'fileName': '${document.title}.pdf',
-        'filePath': path,
-        'imagePaths': <String>[],
-      },
-    );
+    await context.push('/pdf-preview', extra: document);
 
     if (!mounted) {
       return;
     }
 
-    await _loadDocuments();
+    await _loadData();
   }
-
-  // ============================================================
-  // REMOVE SCANLY FAVORITE
-  // ============================================================
 
   Future<void> _removeFavorite(ScanlyItem item) async {
-    await ScanlyActivityService.removeFavorite(item.id);
+    await ScanlyActivityService.removeFavorite(item);
 
     if (!mounted) {
       return;
     }
 
-    _showMessage('Removed from favorites');
+    _showMessage('Moved to Trash');
   }
-
-  // ============================================================
-  // REMOVE PDF FAVORITE
-  // ============================================================
 
   Future<void> _removeDocumentFavorite(DocumentModel document) async {
     await DocumentStorage.toggleFavorite(document);
@@ -208,12 +188,8 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     _showMessage('Removed from favorites');
 
-    await _loadDocuments();
+    await _loadData();
   }
-
-  // ============================================================
-  // CLEAR ALL FAVORITES
-  // ============================================================
 
   Future<void> _clearFavorites() async {
     final confirmed = await _showClearFavoritesDialog();
@@ -222,21 +198,7 @@ class _FavoritesPageState extends State<FavoritesPage>
       return;
     }
 
-    // ----------------------------------------------------------
-    // Clear ALL Scanly favorites.
-    //
-    // This includes:
-    // - QR Favorites
-    // - Notes Favorites
-    // - Images Favorites
-    // - Other ScanlyItem Favorites
-    // ----------------------------------------------------------
-
     await ScanlyActivityService.clearFavorites();
-
-    // ----------------------------------------------------------
-    // Clear PDF favorites separately.
-    // ----------------------------------------------------------
 
     final documents = _favoriteDocuments();
 
@@ -252,14 +214,10 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     setState(() {});
 
-    _showMessage('Favorites cleared');
+    _showMessage('Favorites moved to Trash');
 
-    await _loadDocuments();
+    await _loadData();
   }
-
-  // ============================================================
-  // CLEAR DIALOG
-  // ============================================================
 
   Future<bool?> _showClearFavoritesDialog() {
     return showDialog<bool>(
@@ -280,7 +238,7 @@ class _FavoritesPageState extends State<FavoritesPage>
             ),
           ),
           content: Text(
-            'Remove all items from your favorites?',
+            'Move all items from your favorites to Trash?',
             style: TextStyle(color: colors.onSurfaceVariant),
           ),
           actions: [
@@ -303,26 +261,6 @@ class _FavoritesPageState extends State<FavoritesPage>
     );
   }
 
-  // ============================================================
-  // MESSAGE
-  // ============================================================
-
-  void _showMessage(String message) {
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
-      );
-  }
-
-  // ============================================================
-  // SECTION TITLE
-  // ============================================================
-
   Widget _buildSectionTitle(BuildContext context, String title, IconData icon) {
     final colors = Theme.of(context).colorScheme;
 
@@ -342,9 +280,27 @@ class _FavoritesPageState extends State<FavoritesPage>
     );
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
+  List<Widget> _buildScanlyItemList(List<ScanlyItem> items) {
+    return items.map((item) {
+      return FavoriteItemCard(
+        item: item,
+        onOpen: () => _openItem(item),
+        onRemove: () => _removeFavorite(item),
+      );
+    }).toList();
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -352,20 +308,25 @@ class _FavoritesPageState extends State<FavoritesPage>
 
     final colors = theme.colorScheme;
 
-    // IMPORTANT:
-    // This now contains QR Favorites too.
-    final favorites = _favorites;
-
     final documentFavorites = _favoriteDocuments();
 
-    final hasFavorites = favorites.isNotEmpty || documentFavorites.isNotEmpty;
+    final noteFavorites = _noteFavorites;
+
+    final qrFavorites = _qrFavorites;
+
+    final imageToTextFavorites = _imageToTextFavorites;
+
+    final otherFavorites = _otherFavorites;
+
+    final hasFavorites =
+        documentFavorites.isNotEmpty ||
+        noteFavorites.isNotEmpty ||
+        qrFavorites.isNotEmpty ||
+        imageToTextFavorites.isNotEmpty ||
+        otherFavorites.isNotEmpty;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-
-      // ========================================================
-      // APP BAR
-      // ========================================================
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         foregroundColor: colors.onSurface,
@@ -387,30 +348,21 @@ class _FavoritesPageState extends State<FavoritesPage>
             ),
         ],
       ),
-
-      // ========================================================
-      // BODY
-      // ========================================================
       body: !hasFavorites
           ? const FavoritesEmptyState()
           : RefreshIndicator(
               color: colors.primary,
-              onRefresh: _loadDocuments,
+              onRefresh: _loadData,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
                 children: [
-                  // ==================================================
-                  // PDF DOCUMENTS
-                  // ==================================================
                   if (documentFavorites.isNotEmpty) ...[
                     _buildSectionTitle(
                       context,
                       'PDF Documents',
                       Icons.picture_as_pdf_rounded,
                     ),
-
                     const SizedBox(height: 10),
-
                     ...documentFavorites.map(
                       (document) => FavoriteDocumentCard(
                         document: document,
@@ -419,31 +371,51 @@ class _FavoritesPageState extends State<FavoritesPage>
                       ),
                     ),
                   ],
-
-                  // ==================================================
-                  // OTHER FAVORITES
-                  //
-                  // Includes QR Favorites automatically.
-                  // ==================================================
-                  if (favorites.isNotEmpty) ...[
+                  if (noteFavorites.isNotEmpty) ...[
                     if (documentFavorites.isNotEmpty)
                       const SizedBox(height: 22),
-
+                    _buildSectionTitle(context, 'Notes', Icons.notes_rounded),
+                    const SizedBox(height: 10),
+                    ..._buildScanlyItemList(noteFavorites),
+                  ],
+                  if (qrFavorites.isNotEmpty) ...[
+                    if (documentFavorites.isNotEmpty ||
+                        noteFavorites.isNotEmpty)
+                      const SizedBox(height: 22),
+                    _buildSectionTitle(
+                      context,
+                      'QR Codes',
+                      Icons.qr_code_rounded,
+                    ),
+                    const SizedBox(height: 10),
+                    ..._buildScanlyItemList(qrFavorites),
+                  ],
+                  if (imageToTextFavorites.isNotEmpty) ...[
+                    if (documentFavorites.isNotEmpty ||
+                        noteFavorites.isNotEmpty ||
+                        qrFavorites.isNotEmpty)
+                      const SizedBox(height: 22),
+                    _buildSectionTitle(
+                      context,
+                      'Image to Text',
+                      Icons.text_snippet_outlined,
+                    ),
+                    const SizedBox(height: 10),
+                    ..._buildScanlyItemList(imageToTextFavorites),
+                  ],
+                  if (otherFavorites.isNotEmpty) ...[
+                    if (documentFavorites.isNotEmpty ||
+                        noteFavorites.isNotEmpty ||
+                        qrFavorites.isNotEmpty ||
+                        imageToTextFavorites.isNotEmpty)
+                      const SizedBox(height: 22),
                     _buildSectionTitle(
                       context,
                       'Other Favorites',
                       Icons.favorite_rounded,
                     ),
-
                     const SizedBox(height: 10),
-
-                    ...favorites.map(
-                      (item) => FavoriteItemCard(
-                        item: item,
-                        onOpen: () => _openItem(item),
-                        onRemove: () => _removeFavorite(item),
-                      ),
-                    ),
+                    ..._buildScanlyItemList(otherFavorites),
                   ],
                 ],
               ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import 'package:scanly/Core/ScanlyActivityService.dart';
+import 'package:scanly/Service/Ads/AdService.dart';
 import 'package:scanly/Widgets/Qr/QRFavoriteItem.dart';
 import 'package:scanly/Widgets/Qr/QRFavoritesEmptyState.dart';
 import 'package:scanly/Pages/QR/QRPreviewPage.dart';
@@ -16,7 +18,6 @@ class QRFavoritesPage extends StatefulWidget {
 
 class _QRFavoritesPageState
     extends State<QRFavoritesPage> {
-
   @override
   void initState() {
     super.initState();
@@ -43,15 +44,17 @@ class _QRFavoritesPageState
     setState(() {});
   }
 
-  // ============================================================
-  // OPEN PREVIEW
-  // ============================================================
-
-  void _openPreview(
+  Future<void> _openPreview(
     BuildContext context,
     String value,
-  ) {
-    Navigator.push(
+  ) async {
+    await AdService.showInterstitialBeforeAction();
+
+    if (!context.mounted) {
+      return;
+    }
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => QRPreviewPage(
@@ -61,21 +64,13 @@ class _QRFavoritesPageState
     );
   }
 
-  // ============================================================
-  // REMOVE FAVORITE
-  // ============================================================
-
   Future<void> _removeFavorite(
-    String id,
+    dynamic item,
   ) async {
     await ScanlyActivityService.removeFavorite(
-      id,
+      item,
     );
   }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -101,28 +96,28 @@ class _QRFavoritesPageState
         24,
       ),
       itemCount: favorites.length,
-      separatorBuilder: (_, __) =>
-          const SizedBox(height: 10),
+      separatorBuilder: (_, __) {
+        return const SizedBox(height: 10);
+      },
       itemBuilder: (
         context,
         index,
       ) {
         final item = favorites[index];
-
         final value = item.data!;
 
         return GestureDetector(
-          onTap: () {
-            _openPreview(
+          onTap: () async {
+            await _openPreview(
               context,
               value,
             );
           },
           child: QRFavoriteItem(
             value: value,
-            onRemove: () {
-              _removeFavorite(
-                item.id,
+            onRemove: () async {
+              await _removeFavorite(
+                item,
               );
             },
           ),

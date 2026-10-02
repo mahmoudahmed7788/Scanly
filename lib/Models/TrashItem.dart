@@ -46,11 +46,20 @@ extension TrashItemTypeExtension on TrashItemType {
 }
 
 class TrashItem {
+  /// Number of days an item stays in Trash before automatic deletion.
+  static const int retentionDays = 30;
+
   final String id;
   final TrashItemType type;
   final String title;
   final Map<String, dynamic> data;
   final DateTime deletedAt;
+
+  /// Whether the item was marked as favorite before deletion.
+  final bool wasFavorite;
+
+  /// Whether the item existed in Recent before deletion.
+  final bool wasRecent;
 
   const TrashItem({
     required this.id,
@@ -58,17 +67,18 @@ class TrashItem {
     required this.title,
     required this.data,
     required this.deletedAt,
+    this.wasFavorite = false,
+    this.wasRecent = false,
   });
 
   DateTime get permanentDeleteAt {
     return deletedAt.add(
-      const Duration(days: 30),
+      const Duration(days: retentionDays),
     );
   }
 
   Duration get remainingDuration {
-    final remaining =
-        permanentDeleteAt.difference(DateTime.now());
+    final remaining = permanentDeleteAt.difference(DateTime.now());
 
     if (remaining.isNegative) {
       return Duration.zero;
@@ -78,21 +88,17 @@ class TrashItem {
   }
 
   bool get isExpired {
-    return DateTime.now().isAfter(
-      permanentDeleteAt,
-    );
+    return !DateTime.now().isBefore(permanentDeleteAt);
   }
 
   int get remainingDays {
-    final duration = remainingDuration;
+    final remaining = remainingDuration;
 
-    if (duration == Duration.zero) {
+    if (remaining == Duration.zero) {
       return 0;
     }
 
-    return duration.inHours == 0
-        ? 1
-        : (duration.inHours / 24).ceil();
+    return (remaining.inHours / 24).ceil();
   }
 
   Map<String, dynamic> toMap() {
@@ -102,6 +108,8 @@ class TrashItem {
       'title': title,
       'data': data,
       'deletedAt': deletedAt.toIso8601String(),
+      'wasFavorite': wasFavorite,
+      'wasRecent': wasRecent,
     };
   }
 
@@ -109,30 +117,83 @@ class TrashItem {
     return jsonEncode(toMap());
   }
 
-  factory TrashItem.fromMap(
-    Map<String, dynamic> map,
-  ) {
+  factory TrashItem.fromMap(Map<String, dynamic> map) {
+    final id = map['id']?.toString().trim() ?? '';
+
+    if (id.isEmpty) {
+      throw const FormatException(
+        'TrashItem is missing a valid id.',
+      );
+    }
+
+    final rawData = map['data'];
+
+    if (rawData != null && rawData is! Map) {
+      throw const FormatException(
+        'TrashItem data must be a Map.',
+      );
+    }
+
+    final deletedAtString = map['deletedAt']?.toString() ?? '';
+
+    final deletedAt = DateTime.tryParse(deletedAtString);
+
+    if (deletedAt == null) {
+      throw const FormatException(
+        'TrashItem is missing a valid deletedAt value.',
+      );
+    }
+
     return TrashItem(
-      id: map['id']?.toString() ?? '',
+      id: id,
       type: TrashItemTypeExtension.fromValue(
         map['type']?.toString() ?? 'other',
       ),
-      title: map['title']?.toString() ?? 'Deleted Item',
-      data: Map<String, dynamic>.from(
-        map['data'] ?? {},
+      title: _sanitizeTitle(
+        map['title']?.toString(),
       ),
-      deletedAt: DateTime.tryParse(
-            map['deletedAt']?.toString() ?? '',
-          ) ??
-          DateTime.now(),
+      data: rawData == null
+          ? <String, dynamic>{}
+          : Map<String, dynamic>.from(rawData),
+      deletedAt: deletedAt,
+      wasFavorite: _parseBool(map['wasFavorite']),
+      wasRecent: _parseBool(map['wasRecent']),
     );
   }
 
   factory TrashItem.fromJson(String value) {
+    final decoded = jsonDecode(value);
+
+    if (decoded is! Map) {
+      throw const FormatException(
+        'TrashItem JSON must contain an object.',
+      );
+    }
+
     return TrashItem.fromMap(
-      Map<String, dynamic>.from(
-        jsonDecode(value),
-      ),
+      Map<String, dynamic>.from(decoded),
     );
+  }
+
+  static bool _parseBool(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+
+    if (value is String) {
+      return value.toLowerCase() == 'true';
+    }
+
+    return false;
+  }
+
+  static String _sanitizeTitle(String? value) {
+    final title = value?.trim() ?? '';
+
+    if (title.isEmpty) {
+      return 'Deleted Item';
+    }
+
+    return title;
   }
 }

@@ -1,31 +1,29 @@
-// ============================================================
-// SOCIAL AUTHENTICATION
-// ============================================================
-
 part of 'Auth_Cubit.dart';
 
 extension AuthSocialMethods on AuthCubit {
-  // ============================================================
-  // GOOGLE LOGIN
-  // ============================================================
-
   Future<void> signInWithGoogle() async {
-    emit(
-      const AuthState(
-        status: AuthStatus.loading,
-      ),
+    await _handleGoogleAuthentication(
+      isRegistering: false,
     );
+  }
+
+  Future<void> registerWithGoogle() async {
+    await _handleGoogleAuthentication(
+      isRegistering: true,
+    );
+  }
+
+  Future<void> _handleGoogleAuthentication({
+    required bool isRegistering,
+  }) async {
+    emit(const AuthState(status: AuthStatus.loading));
 
     try {
       debugPrint(
-        'GOOGLE: Waiting for initialization...',
+        'GOOGLE: ${isRegistering ? 'REGISTER' : 'LOGIN'} started.',
       );
 
       await _googleSignInInitialization;
-
-      debugPrint(
-        'GOOGLE: Initialization completed.',
-      );
 
       if (!_googleSignIn.supportsAuthenticate()) {
         throw Exception(
@@ -33,9 +31,7 @@ extension AuthSocialMethods on AuthCubit {
         );
       }
 
-      debugPrint(
-        'GOOGLE: Opening account picker...',
-      );
+      debugPrint('GOOGLE: Opening account picker...');
 
       final GoogleSignInAccount googleUser =
           await _googleSignIn.authenticate();
@@ -47,8 +43,7 @@ extension AuthSocialMethods on AuthCubit {
       final GoogleSignInAuthentication googleAuth =
           googleUser.authentication;
 
-      final String? idToken =
-          googleAuth.idToken;
+      final String? idToken = googleAuth.idToken;
 
       if (idToken == null || idToken.isEmpty) {
         throw Exception(
@@ -56,61 +51,109 @@ extension AuthSocialMethods on AuthCubit {
         );
       }
 
-      debugPrint(
-        'GOOGLE: ID token received.',
-      );
-
       final OAuthCredential credential =
           GoogleAuthProvider.credential(
         idToken: idToken,
       );
 
-      debugPrint(
-        'GOOGLE: Signing in to Firebase...',
-      );
+      debugPrint('GOOGLE: Signing in to Firebase...');
 
       final UserCredential userCredential =
           await _auth.signInWithCredential(
         credential,
       );
 
-      final User? user =
-          userCredential.user;
+      final User? user = userCredential.user;
 
       if (user == null) {
         throw Exception(
-          'Could not create the Google account.',
+          'Could not authenticate with Google.',
         );
       }
 
       debugPrint(
-        'GOOGLE: Firebase login successful: ${user.email}',
+        'GOOGLE: Firebase authentication successful.',
       );
 
-      try {
-        await _createOrUpdateUserDocument(
-          user,
-          provider: 'google',
+      final DocumentSnapshot<Map<String, dynamic>> userDocument =
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+      final bool isRegistered = userDocument.exists;
+
+      debugPrint(
+        'GOOGLE: Scanly account exists = $isRegistered',
+      );
+
+      if (!isRegistering) {
+        if (!isRegistered) {
+          debugPrint(
+            'GOOGLE: Account is not registered in Scanly.',
+          );
+
+          await _signOutSocialUser();
+
+          emit(
+            const AuthState(
+              status: AuthStatus.notRegistered,
+            ),
+          );
+
+          return;
+        }
+
+        emit(
+          AuthState(
+            status: AuthStatus.success,
+            user: user,
+          ),
         );
 
-        debugPrint(
-          'GOOGLE: Firestore user document saved.',
-        );
-      } catch (e) {
-        debugPrint(
-          'GOOGLE: Firestore error: $e',
-        );
+        return;
       }
+
+      if (isRegistered) {
+        debugPrint(
+          'GOOGLE: Account is already registered in Scanly.',
+        );
+
+        await _signOutSocialUser();
+
+        emit(
+          const AuthState(
+            status: AuthStatus.alreadyRegistered,
+          ),
+        );
+
+        return;
+      }
+
+      await _createOrUpdateUserDocument(
+        user,
+        provider: 'google',
+      );
+
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .set(
+        {
+          'onboardingCompleted': false,
+        },
+        SetOptions(merge: true),
+      );
+
+      debugPrint(
+        'GOOGLE: New Scanly account created.',
+      );
 
       emit(
         AuthState(
           status: AuthStatus.success,
           user: user,
         ),
-      );
-
-      debugPrint(
-        'GOOGLE: AuthStatus.success emitted.',
       );
     } on GoogleSignInException catch (e) {
       debugPrint(
@@ -121,8 +164,7 @@ extension AuthSocialMethods on AuthCubit {
         'GOOGLE DESCRIPTION: ${e.description}',
       );
 
-      if (e.code ==
-          GoogleSignInExceptionCode.canceled) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
         emit(
           const AuthState(
             status: AuthStatus.initial,
@@ -133,9 +175,7 @@ extension AuthSocialMethods on AuthCubit {
       }
 
       _emitFailure(
-        'Google Sign-In Error: '
-        '${e.code} - '
-        '${e.description ?? 'Unknown error'}',
+        'Google sign-in failed. Please try again.',
       );
     } on FirebaseAuthException catch (e) {
       debugPrint(
@@ -146,10 +186,9 @@ extension AuthSocialMethods on AuthCubit {
         'GOOGLE FIREBASE MESSAGE: ${e.message}',
       );
 
-      _emitFailure(
-        'Firebase Error: '
-        '${e.code} - '
-        '${_getErrorMessage(e.code)}',
+      _emitFirebaseAuthError(
+        e,
+        prefix: 'GOOGLE FIREBASE ERROR',
       );
     } catch (e) {
       debugPrint(
@@ -157,25 +196,31 @@ extension AuthSocialMethods on AuthCubit {
       );
 
       _emitFailure(
-        'Google Error: $e',
+        'Google sign-in failed. Please try again.',
       );
     }
   }
 
-  // ============================================================
-  // FACEBOOK LOGIN
-  // ============================================================
-
   Future<void> signInWithFacebook() async {
-    emit(
-      const AuthState(
-        status: AuthStatus.loading,
-      ),
+    await _handleFacebookAuthentication(
+      isRegistering: false,
     );
+  }
+
+  Future<void> registerWithFacebook() async {
+    await _handleFacebookAuthentication(
+      isRegistering: true,
+    );
+  }
+
+  Future<void> _handleFacebookAuthentication({
+    required bool isRegistering,
+  }) async {
+    emit(const AuthState(status: AuthStatus.loading));
 
     try {
       debugPrint(
-        'FACEBOOK: Opening Facebook login...',
+        'FACEBOOK: ${isRegistering ? 'REGISTER' : 'LOGIN'} started.',
       );
 
       final LoginResult loginResult =
@@ -190,8 +235,11 @@ extension AuthSocialMethods on AuthCubit {
         'FACEBOOK: Login status: ${loginResult.status}',
       );
 
-      if (loginResult.status ==
-          LoginStatus.cancelled) {
+      debugPrint(
+        'FACEBOOK: Login message: ${loginResult.message}',
+      );
+
+      if (loginResult.status == LoginStatus.cancelled) {
         emit(
           const AuthState(
             status: AuthStatus.initial,
@@ -201,21 +249,23 @@ extension AuthSocialMethods on AuthCubit {
         return;
       }
 
-      if (loginResult.status !=
-          LoginStatus.success) {
-        throw Exception(
-          loginResult.message ??
-              'Facebook login failed.',
+      if (loginResult.status != LoginStatus.success) {
+        _emitFailure(
+          'Facebook sign-in failed. Please try again.',
         );
+
+        return;
       }
 
       final AccessToken? accessToken =
           loginResult.accessToken;
 
       if (accessToken == null) {
-        throw Exception(
-          'Facebook access token was not received.',
+        _emitFailure(
+          'Facebook sign-in failed. Please try again.',
         );
+
+        return;
       }
 
       debugPrint(
@@ -227,26 +277,23 @@ extension AuthSocialMethods on AuthCubit {
         accessToken.tokenString,
       );
 
-      debugPrint(
-        'FACEBOOK: Signing in to Firebase...',
-      );
-
       final UserCredential userCredential =
           await _auth.signInWithCredential(
         credential,
       );
 
-      final User? user =
-          userCredential.user;
+      final User? user = userCredential.user;
 
       if (user == null) {
-        throw Exception(
-          'Could not create the Facebook account.',
+        _emitFailure(
+          'Facebook sign-in failed. Please try again.',
         );
+
+        return;
       }
 
       debugPrint(
-        'FACEBOOK: Firebase login successful.',
+        'FACEBOOK: Firebase authentication successful.',
       );
 
       debugPrint(
@@ -257,30 +304,85 @@ extension AuthSocialMethods on AuthCubit {
         'FACEBOOK: Email = ${user.email}',
       );
 
-      try {
-        await _createOrUpdateUserDocument(
-          user,
-          provider: 'facebook',
+      final DocumentSnapshot<Map<String, dynamic>> userDocument =
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+      final bool isRegistered = userDocument.exists;
+
+      debugPrint(
+        'FACEBOOK: Scanly account exists = $isRegistered',
+      );
+
+      if (!isRegistering) {
+        if (!isRegistered) {
+          debugPrint(
+            'FACEBOOK: Account is not registered in Scanly.',
+          );
+
+          await _signOutSocialUser();
+
+          emit(
+            const AuthState(
+              status: AuthStatus.notRegistered,
+            ),
+          );
+
+          return;
+        }
+
+        emit(
+          AuthState(
+            status: AuthStatus.success,
+            user: user,
+          ),
         );
 
-        debugPrint(
-          'FACEBOOK: Firestore user document saved.',
-        );
-      } catch (e) {
-        debugPrint(
-          'FACEBOOK: Firestore error: $e',
-        );
+        return;
       }
+
+      if (isRegistered) {
+        debugPrint(
+          'FACEBOOK: Account is already registered in Scanly.',
+        );
+
+        await _signOutSocialUser();
+
+        emit(
+          const AuthState(
+            status: AuthStatus.alreadyRegistered,
+          ),
+        );
+
+        return;
+      }
+
+      await _createOrUpdateUserDocument(
+        user,
+        provider: 'facebook',
+      );
+
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .set(
+        {
+          'onboardingCompleted': false,
+        },
+        SetOptions(merge: true),
+      );
+
+      debugPrint(
+        'FACEBOOK: New Scanly account created.',
+      );
 
       emit(
         AuthState(
           status: AuthStatus.success,
           user: user,
         ),
-      );
-
-      debugPrint(
-        'FACEBOOK: AuthStatus.success emitted.',
       );
     } on FirebaseAuthException catch (e) {
       debugPrint(
@@ -291,10 +393,9 @@ extension AuthSocialMethods on AuthCubit {
         'FACEBOOK FIREBASE MESSAGE: ${e.message}',
       );
 
-      _emitFailure(
-        'Firebase Error: '
-        '${e.code} - '
-        '${_getErrorMessage(e.code)}',
+      _emitFirebaseAuthError(
+        e,
+        prefix: 'FACEBOOK FIREBASE ERROR',
       );
     } catch (e) {
       debugPrint(
@@ -302,21 +403,39 @@ extension AuthSocialMethods on AuthCubit {
       );
 
       _emitFailure(
-        'Facebook Error: $e',
+        'Facebook sign-in failed. Please try again.',
       );
     }
   }
 
-  // ============================================================
-  // LOGOUT
-  // ============================================================
+  Future<void> _signOutSocialUser() async {
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      debugPrint(
+        'Firebase social sign out error: $e',
+      );
+    }
+
+    try {
+      await _googleSignIn.signOut();
+    } catch (e) {
+      debugPrint(
+        'Google sign out error: $e',
+      );
+    }
+
+    try {
+      await FacebookAuth.instance.logOut();
+    } catch (e) {
+      debugPrint(
+        'Facebook logout error: $e',
+      );
+    }
+  }
 
   Future<void> logout() async {
     try {
-      // --------------------------------------------------------
-      // GOOGLE LOGOUT
-      // --------------------------------------------------------
-
       try {
         await _googleSignIn.signOut();
       } catch (e) {
@@ -324,10 +443,6 @@ extension AuthSocialMethods on AuthCubit {
           'Google sign out error: $e',
         );
       }
-
-      // --------------------------------------------------------
-      // FACEBOOK LOGOUT
-      // --------------------------------------------------------
 
       try {
         await FacebookAuth.instance.logOut();
@@ -337,10 +452,6 @@ extension AuthSocialMethods on AuthCubit {
         );
       }
 
-      // --------------------------------------------------------
-      // FIREBASE LOGOUT
-      // --------------------------------------------------------
-
       await _auth.signOut();
 
       emit(
@@ -348,9 +459,26 @@ extension AuthSocialMethods on AuthCubit {
           status: AuthStatus.initial,
         ),
       );
+    } on FirebaseAuthException catch (e) {
+      debugPrint(
+        'LOGOUT FIREBASE ERROR: ${e.code}',
+      );
+
+      debugPrint(
+        'LOGOUT FIREBASE MESSAGE: ${e.message}',
+      );
+
+      _emitFirebaseAuthError(
+        e,
+        prefix: 'LOGOUT FIREBASE ERROR',
+      );
     } catch (e) {
+      debugPrint(
+        'LOGOUT ERROR: $e',
+      );
+
       _emitFailure(
-        'Logout error: $e',
+        'Logout failed. Please try again.',
       );
     }
   }

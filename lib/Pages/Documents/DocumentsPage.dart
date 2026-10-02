@@ -1,7 +1,9 @@
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scanly/Core/DocumentStorage.dart';
 import 'package:scanly/Models/DocumentModel.dart';
+import 'package:scanly/Service/Ads/AdService.dart';
 import 'package:scanly/Widgets/Documents/DocumentCard.dart';
 import 'package:scanly/Widgets/Documents/document_utils.dart';
 import 'package:scanly/Widgets/Documents/documents_empty_state.dart';
@@ -19,10 +21,6 @@ class DocumentsPage extends StatefulWidget {
 class _DocumentsPageState
     extends State<DocumentsPage>
     with WidgetsBindingObserver {
-  // =========================================================
-  // STATE
-  // =========================================================
-
   List<DocumentModel> _documents = [];
 
   List<DocumentModel> _filteredDocuments = [];
@@ -30,10 +28,6 @@ class _DocumentsPageState
   bool _isLoading = true;
 
   String _searchQuery = '';
-
-  // =========================================================
-  // INIT
-  // =========================================================
 
   @override
   void initState() {
@@ -46,10 +40,6 @@ class _DocumentsPageState
     _loadDocuments();
   }
 
-  // =========================================================
-  // DISPOSE
-  // =========================================================
-
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(
@@ -59,42 +49,14 @@ class _DocumentsPageState
     super.dispose();
   }
 
-  // =========================================================
-  // APP LIFECYCLE
-  // =========================================================
-
   @override
   void didChangeAppLifecycleState(
     AppLifecycleState state,
   ) {
-    if (state ==
-        AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed) {
       _loadDocuments();
     }
   }
-
-  // =========================================================
-  // LOAD DOCUMENTS
-  // =========================================================
-  //
-  // IMPORTANT:
-  //
-  // We intentionally DO NOT call:
-  //
-  // DocumentStorage.syncFromDisk()
-  //
-  // here.
-  //
-  // Documents created by Scanly are already stored
-  // inside DocumentStorage / Hive.
-  //
-  // Reading Hive directly makes newly-created
-  // documents appear immediately.
-  //
-  // This also prevents a slow disk scan from making
-  // the page look empty or removing a document whose
-  // cloud upload is still running.
-  // =========================================================
 
   Future<void> _loadDocuments() async {
     if (mounted) {
@@ -145,10 +107,6 @@ class _DocumentsPageState
     }
   }
 
-  // =========================================================
-  // SEARCH
-  // =========================================================
-
   void _updateSearch(
     String value,
   ) {
@@ -163,21 +121,19 @@ class _DocumentsPageState
     });
   }
 
-  // =========================================================
-  // CLEAR SEARCH
-  // =========================================================
-
   void _clearSearch() {
     _updateSearch('');
   }
 
-  // =========================================================
-  // OPEN DOCUMENT
-  // =========================================================
-
   Future<void> _openDocument(
     DocumentModel document,
   ) async {
+    if (!mounted) {
+      return;
+    }
+
+    await AdService.showInterstitialBeforeAction();
+
     if (!mounted) {
       return;
     }
@@ -191,22 +147,8 @@ class _DocumentsPageState
       return;
     }
 
-    // -------------------------------------------------------
-    // Reload after returning from Preview.
-    //
-    // This catches:
-    // - edited PDFs
-    // - renamed PDFs
-    // - favorite changes
-    // - updated document metadata
-    // -------------------------------------------------------
-
     await _loadDocuments();
   }
-
-  // =========================================================
-  // TOGGLE FAVORITE
-  // =========================================================
 
   Future<void> _toggleFavorite(
     DocumentModel document,
@@ -237,10 +179,6 @@ class _DocumentsPageState
     });
   }
 
-  // =========================================================
-  // DELETE DOCUMENT
-  // =========================================================
-
   Future<void> _deleteDocument(
     DocumentModel document,
   ) async {
@@ -268,10 +206,6 @@ class _DocumentsPageState
     await _loadDocuments();
   }
 
-  // =========================================================
-  // DELETE CONFIRMATION
-  // =========================================================
-
   Future<bool?> _showDeleteDialog(
     DocumentModel document,
   ) {
@@ -285,7 +219,6 @@ class _DocumentsPageState
         return AlertDialog(
           backgroundColor:
               colors.surface,
-
           shape:
               RoundedRectangleBorder(
             borderRadius:
@@ -293,7 +226,6 @@ class _DocumentsPageState
               20,
             ),
           ),
-
           title: Text(
             'Delete Document',
             style: TextStyle(
@@ -303,7 +235,6 @@ class _DocumentsPageState
                   FontWeight.w700,
             ),
           ),
-
           content: Text(
             'Are you sure you want to delete "${document.title}"?',
             style: TextStyle(
@@ -311,7 +242,6 @@ class _DocumentsPageState
                   colors.onSurfaceVariant,
             ),
           ),
-
           actions: [
             TextButton(
               onPressed: () {
@@ -325,7 +255,6 @@ class _DocumentsPageState
                 'Cancel',
               ),
             ),
-
             FilledButton.icon(
               onPressed: () {
                 Navigator.pop(
@@ -333,12 +262,10 @@ class _DocumentsPageState
                   true,
                 );
               },
-
               icon: const Icon(
                 Icons
                     .delete_outline_rounded,
               ),
-
               label:
                   const Text(
                 'Delete',
@@ -349,10 +276,6 @@ class _DocumentsPageState
       },
     );
   }
-
-  // =========================================================
-  // MESSAGE
-  // =========================================================
 
   void _showMessage(
     String message,
@@ -367,16 +290,11 @@ class _DocumentsPageState
         SnackBar(
           behavior:
               SnackBarBehavior.floating,
-
           content:
               Text(message),
         ),
       );
   }
-
-  // =========================================================
-  // SEARCH FIELD
-  // =========================================================
 
   Widget _buildSearchField(
     BuildContext context,
@@ -393,41 +311,33 @@ class _DocumentsPageState
         16,
         12,
       ),
-
       child: TextField(
         onChanged:
             _updateSearch,
-
         style: TextStyle(
           color:
               colors.onSurface,
         ),
-
         decoration:
             InputDecoration(
           hintText:
               'Search documents...',
-
           hintStyle: TextStyle(
             color:
                 colors.onSurfaceVariant,
           ),
-
           prefixIcon: Icon(
             Icons.search_rounded,
             color:
                 colors.primary,
           ),
-
           suffixIcon:
               _searchQuery.isNotEmpty
                   ? IconButton(
                       tooltip:
                           'Clear search',
-
                       onPressed:
                           _clearSearch,
-
                       icon: Icon(
                         Icons
                             .close_rounded,
@@ -436,41 +346,33 @@ class _DocumentsPageState
                       ),
                     )
                   : null,
-
           filled: true,
-
           fillColor:
               colors.surface,
-
           border:
               OutlineInputBorder(
             borderRadius:
                 BorderRadius.circular(
               16,
             ),
-
             borderSide:
                 BorderSide.none,
           ),
-
           enabledBorder:
               OutlineInputBorder(
             borderRadius:
                 BorderRadius.circular(
               16,
             ),
-
             borderSide:
                 BorderSide.none,
           ),
-
           focusedBorder:
               OutlineInputBorder(
             borderRadius:
                 BorderRadius.circular(
               16,
             ),
-
             borderSide:
                 BorderSide(
               color:
@@ -483,15 +385,10 @@ class _DocumentsPageState
     );
   }
 
-  // =========================================================
-  // DOCUMENT LIST
-  // =========================================================
-
   Widget _buildDocumentList() {
     return ListView.builder(
       physics:
           const AlwaysScrollableScrollPhysics(),
-
       padding:
           const EdgeInsets.fromLTRB(
         16,
@@ -499,10 +396,8 @@ class _DocumentsPageState
         16,
         24,
       ),
-
       itemCount:
           _filteredDocuments.length,
-
       itemBuilder:
           (context, index) {
         final document =
@@ -510,22 +405,18 @@ class _DocumentsPageState
 
         return DocumentCard(
           document: document,
-
           onOpen: () =>
               _openDocument(
             document,
           ),
-
           onToggleFavorite: () =>
               _toggleFavorite(
             document,
           ),
-
           onDelete: () =>
               _deleteDocument(
             document,
           ),
-
           onTap: () =>
               _openDocument(
             document,
@@ -534,10 +425,6 @@ class _DocumentsPageState
       },
     );
   }
-
-  // =========================================================
-  // BUILD
-  // =========================================================
 
   @override
   Widget build(
@@ -552,43 +439,29 @@ class _DocumentsPageState
     return Scaffold(
       backgroundColor:
           theme.scaffoldBackgroundColor,
-
-      // =====================================================
-      // APP BAR
-      // =====================================================
-
       appBar: AppBar(
         elevation: 0,
-
         backgroundColor:
             theme.scaffoldBackgroundColor,
-
         foregroundColor:
             colors.onSurface,
-
         surfaceTintColor:
             Colors.transparent,
-
         title: Text(
           'My Documents',
-
           style: TextStyle(
             color:
                 colors.onSurface,
-
             fontWeight:
                 FontWeight.w700,
           ),
         ),
-
         actions: [
           IconButton(
             tooltip:
                 'Refresh',
-
             onPressed:
                 _loadDocuments,
-
             icon: Icon(
               Icons.refresh_rounded,
               color:
@@ -597,11 +470,6 @@ class _DocumentsPageState
           ),
         ],
       ),
-
-      // =====================================================
-      // BODY
-      // =====================================================
-
       body: _isLoading
           ? Center(
               child:
@@ -613,10 +481,8 @@ class _DocumentsPageState
           : RefreshIndicator(
               color:
                   colors.primary,
-
               onRefresh:
                   _loadDocuments,
-
               child:
                   _filteredDocuments
                           .isEmpty
@@ -628,18 +494,9 @@ class _DocumentsPageState
                         )
                       : Column(
                           children: [
-                            // ---------------------------------
-                            // SEARCH
-                            // ---------------------------------
-
                             _buildSearchField(
                               context,
                             ),
-
-                            // ---------------------------------
-                            // DOCUMENTS
-                            // ---------------------------------
-
                             Expanded(
                               child:
                                   _buildDocumentList(),

@@ -10,6 +10,7 @@ import 'package:scanly/Pages/Auth/ForgotPasswordVerficationPage.dart';
 import 'package:scanly/Pages/Auth/Login_Page.dart';
 import 'package:scanly/Pages/Auth/OnBourding_Page.dart';
 import 'package:scanly/Pages/Auth/Register_page.dart';
+import 'package:scanly/Pages/Auth/ResetPasswordPage.dart';
 import 'package:scanly/Pages/Auth/Verfication_Page.dart';
 
 import 'package:scanly/Pages/Documents/DocumentsPage.dart';
@@ -59,6 +60,7 @@ class AppRoutes {
       _registerRoute(),
       _verificationRoute(),
       _forgotPasswordRoute(),
+      _resetPasswordRoute(),
       _onboardingRoute(),
 
       // ======================================================
@@ -162,8 +164,55 @@ class AppRoutes {
     return GoRoute(
       path: '/forgot-password-verification',
       builder: (context, state) {
-        return const ForgotPasswordVerificationPage(
-          email: '',
+        final Object? extra = state.extra;
+
+        final String email =
+            extra is String ? extra : '';
+
+        return ForgotPasswordVerificationPage(
+          email: email,
+        );
+      },
+    );
+  }
+
+  // ==========================================================
+  // RESET PASSWORD
+  // ==========================================================
+
+  static GoRoute _resetPasswordRoute() {
+    return GoRoute(
+      path: '/reset-password',
+      builder: (context, state) {
+        final String? code =
+            state.uri.queryParameters['oobCode'];
+
+        // ----------------------------------------------------
+        // INVALID / MISSING RESET CODE
+        // ----------------------------------------------------
+
+        if (code == null || code.isEmpty) {
+          return const Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Invalid or expired password reset link.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // RESET PASSWORD PAGE
+        // ----------------------------------------------------
+
+        return ResetPasswordPage(
+          code: code,
         );
       },
     );

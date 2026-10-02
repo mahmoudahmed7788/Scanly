@@ -86,10 +86,10 @@ class _HomeActivitySectionsState
         __,
       ) {
         final favorites =
-            ScanlyActivityService.favoritePreview;
+            ScanlyActivityService.favorites;
 
         final recent =
-            ScanlyActivityService.recentPreview;
+            ScanlyActivityService.recent;
 
         final favoriteDocuments =
             _favoriteDocuments();

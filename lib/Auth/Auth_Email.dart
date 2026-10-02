@@ -128,9 +128,30 @@ extension AuthEmailMethods on AuthCubit {
         ),
       );
     } on FirebaseAuthException catch (e) {
-      _emitFirebaseAuthError(
-        e,
-        prefix: 'Firebase authentication error',
+      debugPrint(
+        'LOGIN FIREBASE ERROR: ${e.code} - ${e.message}',
+      );
+
+      if (e.code == 'user-not-found') {
+        emit(
+          AuthState(
+            status: AuthStatus.notRegistered,
+            errorMessage:
+                'This account is not registered. Please create an account first.',
+            errorCode: e.code,
+          ),
+        );
+
+        return;
+      }
+
+      emit(
+        AuthState(
+          status: AuthStatus.failure,
+          errorMessage: e.message ??
+              'Authentication failed.',
+          errorCode: e.code,
+        ),
       );
     } catch (e) {
       _emitFailure(
@@ -211,7 +232,7 @@ extension AuthEmailMethods on AuthCubit {
   }
 
   // ============================================================
-  // PASSWORD RESET
+  // SEND PASSWORD RESET EMAIL
   // ============================================================
 
   Future<void> sendPasswordResetEmail(
@@ -240,6 +261,94 @@ extension AuthEmailMethods on AuthCubit {
       _emitFailure(
         'Password reset error: $e',
       );
+    }
+  }
+
+  // ============================================================
+  // VERIFY PASSWORD RESET CODE
+  // ============================================================
+
+  Future<String?> verifyPasswordResetCode(
+    String code,
+  ) async {
+    try {
+      final email =
+          await _auth.verifyPasswordResetCode(
+        code,
+      );
+
+      debugPrint(
+        'PASSWORD RESET CODE VERIFIED FOR: $email',
+      );
+
+      return email;
+    } on FirebaseAuthException catch (e) {
+      debugPrint(
+        'VERIFY PASSWORD RESET CODE ERROR: '
+        '${e.code} - ${e.message}',
+      );
+
+      return null;
+    } catch (e) {
+      debugPrint(
+        'VERIFY PASSWORD RESET CODE ERROR: $e',
+      );
+
+      return null;
+    }
+  }
+
+  // ============================================================
+  // CONFIRM PASSWORD RESET
+  // ============================================================
+
+  Future<bool> confirmPasswordReset({
+    required String code,
+    required String newPassword,
+  }) async {
+    emit(
+      const AuthState(
+        status: AuthStatus.loading,
+      ),
+    );
+
+    try {
+      await _auth.confirmPasswordReset(
+        code: code,
+        newPassword: newPassword,
+      );
+
+      debugPrint(
+        'PASSWORD RESET: Password updated successfully.',
+      );
+
+      emit(
+        AuthState(
+          status: AuthStatus.success,
+          user: _auth.currentUser,
+        ),
+      );
+
+      return true;
+    } on FirebaseAuthException catch (e) {
+      debugPrint(
+        'CONFIRM PASSWORD RESET ERROR: '
+        '${e.code} - ${e.message}',
+      );
+
+      _emitFirebaseAuthError(e);
+
+      return false;
+    } catch (e) {
+      debugPrint(
+        'CONFIRM PASSWORD RESET ERROR: $e',
+      );
+
+      _emitFailure(
+        'Password reset error: $e',
+      );
+
+      return false;
     }
   }
 }

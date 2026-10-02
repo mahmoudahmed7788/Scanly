@@ -7,27 +7,26 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:scanly/App-Router.dart';
 import 'package:scanly/Auth/Auth_Cubit.dart';
-import 'package:scanly/Core/DocumentStorage.dart';
 import 'package:scanly/Core/App_Theme.dart';
-import 'package:scanly/Core/ScanlyActivityService.dart';
-import 'package:scanly/Service/Firebase/firebase_options.dart';
+import 'package:scanly/Core/DocumentStorage.dart';
 import 'package:scanly/Service/Ads/AdService.dart';
+import 'package:scanly/Service/Firebase/firebase_options.dart';
+import 'package:scanly/core/ScanlyActivityService.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ==========================================================
-  // FIREBASE
-  // ==========================================================
-  //
-  // Firebase is initialized before runApp because AuthCubit
-  // and the authentication flow may depend on it.
-  //
+  await _initializeFirebase();
 
+  runApp(
+    const ScanlyBootstrap(),
+  );
+}
+
+Future<void> _initializeFirebase() async {
   try {
     await Firebase.initializeApp(
-      options:
-          DefaultFirebaseOptions.currentPlatform,
+      options: DefaultFirebaseOptions.currentPlatform,
     );
 
     debugPrint(
@@ -41,100 +40,154 @@ Future<void> main() async {
     debugPrint(
       '$stackTrace',
     );
+  }
+}
 
-    // Firebase is required by the application.
-    rethrow;
+class ScanlyBootstrap extends StatefulWidget {
+  const ScanlyBootstrap({
+    super.key,
+  });
+
+  @override
+  State<ScanlyBootstrap> createState() => _ScanlyBootstrapState();
+}
+
+class _ScanlyBootstrapState extends State<ScanlyBootstrap> {
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) {
+        unawaited(
+          _initializeBackgroundServices(),
+        );
+      },
+    );
   }
 
-  // ==========================================================
-  // START APP IMMEDIATELY
-  // ==========================================================
-  //
-  // IMPORTANT:
-  //
-  // We do NOT wait for:
-  //
-  // - Supabase
-  // - Theme
-  // - DocumentStorage
-  // - ScanlyActivityService
-  // - Ads
-  //
-  // before showing the Flutter application.
-  //
-
-  runApp(
-    BlocProvider(
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
       create: (_) => AuthCubit(),
       child: const ScanlyApp(),
-    ),
-  );
-
-  // ==========================================================
-  // BACKGROUND INITIALIZATION
-  // ==========================================================
-  //
-  // Everything below starts after the UI is already running.
-  //
-
-  unawaited(
-    _initializeBackgroundServices(),
-  );
+    );
+  }
 }
-
-// ============================================================
-// BACKGROUND INITIALIZATION
-// ============================================================
 
 Future<void> _initializeBackgroundServices() async {
-  // ----------------------------------------------------------
-  // 1. Supabase
-  // ----------------------------------------------------------
-
-  await _initSupabase();
-
-  // ----------------------------------------------------------
-  // 2. Theme
-  // ----------------------------------------------------------
-
   await _initTheme();
 
-  // ----------------------------------------------------------
-  // 3. Document Storage
-  // ----------------------------------------------------------
+  await Future<void>.delayed(
+    const Duration(milliseconds: 100),
+  );
 
-  await _initDocumentStorage();
+  unawaited(
+    _initDocumentStorage(),
+  );
 
-  // ----------------------------------------------------------
-  // 4. Activity Service
-  // ----------------------------------------------------------
+  unawaited(
+    _initActivityService(),
+  );
 
-  await _initActivityService();
+  Future<void>.delayed(
+    const Duration(seconds: 1),
+    () {
+      unawaited(
+        _initAds(),
+      );
+    },
+  );
 
-  // ----------------------------------------------------------
-  // 5. Ads
-  // ----------------------------------------------------------
-
-  await _initAds();
-
-  debugPrint(
-    'Background initialization completed.',
+  Future<void>.delayed(
+    const Duration(seconds: 2),
+    () {
+      unawaited(
+        _initSupabase(),
+      );
+    },
   );
 }
 
-// ============================================================
-// SUPABASE
-// ============================================================
+Future<void> _initTheme() async {
+  try {
+    await ThemeController.loadTheme();
+
+    debugPrint(
+      'Theme initialized successfully.',
+    );
+  } catch (e, stackTrace) {
+    debugPrint(
+      'Theme initialization error: $e',
+    );
+
+    debugPrint(
+      '$stackTrace',
+    );
+  }
+}
+
+Future<void> _initDocumentStorage() async {
+  try {
+    await DocumentStorage.init();
+
+    debugPrint(
+      'DocumentStorage initialized successfully.',
+    );
+  } catch (e, stackTrace) {
+    debugPrint(
+      'DocumentStorage initialization error: $e',
+    );
+
+    debugPrint(
+      '$stackTrace',
+    );
+  }
+}
+
+Future<void> _initActivityService() async {
+  try {
+    await ScanlyActivityService.init();
+
+    debugPrint(
+      'ScanlyActivityService initialized successfully.',
+    );
+  } catch (e, stackTrace) {
+    debugPrint(
+      'ScanlyActivityService initialization error: $e',
+    );
+
+    debugPrint(
+      '$stackTrace',
+    );
+  }
+}
+
+Future<void> _initAds() async {
+  try {
+    await AdService.initialize();
+
+    debugPrint(
+      'AdService initialized successfully.',
+    );
+  } catch (e, stackTrace) {
+    debugPrint(
+      'AdService initialization error: $e',
+    );
+
+    debugPrint(
+      '$stackTrace',
+    );
+  }
+}
 
 Future<void> _initSupabase() async {
   try {
-    const supabaseUrl =
-        String.fromEnvironment(
+    const supabaseUrl = String.fromEnvironment(
       'SUPABASE_URL',
     );
 
-    const supabasePublishableKey =
-        String.fromEnvironment(
+    const supabasePublishableKey = String.fromEnvironment(
       'SUPABASE_PUBLISHABLE_KEY',
     );
 
@@ -166,110 +219,15 @@ Future<void> _initSupabase() async {
   }
 }
 
-// ============================================================
-// DOCUMENT STORAGE
-// ============================================================
-
-Future<void> _initDocumentStorage() async {
-  try {
-    await DocumentStorage.init();
-
-    debugPrint(
-      'DocumentStorage initialized successfully.',
-    );
-  } catch (e, stackTrace) {
-    debugPrint(
-      'DocumentStorage initialization error: $e',
-    );
-
-    debugPrint(
-      '$stackTrace',
-    );
-  }
-}
-
-// ============================================================
-// ACTIVITY SERVICE
-// ============================================================
-
-Future<void> _initActivityService() async {
-  try {
-    await ScanlyActivityService.init();
-
-    debugPrint(
-      'ScanlyActivityService initialized successfully.',
-    );
-  } catch (e, stackTrace) {
-    debugPrint(
-      'ScanlyActivityService initialization error: $e',
-    );
-
-    debugPrint(
-      '$stackTrace',
-    );
-  }
-}
-
-// ============================================================
-// THEME
-// ============================================================
-
-Future<void> _initTheme() async {
-  try {
-    await ThemeController.loadTheme();
-
-    debugPrint(
-      'Theme initialized successfully.',
-    );
-  } catch (e, stackTrace) {
-    debugPrint(
-      'Theme initialization error: $e',
-    );
-
-    debugPrint(
-      '$stackTrace',
-    );
-  }
-}
-
-// ============================================================
-// ADS
-// ============================================================
-
-Future<void> _initAds() async {
-  try {
-    await AdService.initialize();
-
-    debugPrint(
-      'AdService initialized successfully.',
-    );
-  } catch (e, stackTrace) {
-    debugPrint(
-      'AdService initialization error: $e',
-    );
-
-    debugPrint(
-      '$stackTrace',
-    );
-  }
-}
-
-// ============================================================
-// APP
-// ============================================================
-
 class ScanlyApp extends StatelessWidget {
   const ScanlyApp({
     super.key,
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
-      valueListenable:
-          ThemeController.mode,
+      valueListenable: ThemeController.mode,
       builder: (
         context,
         themeMode,
@@ -277,20 +235,11 @@ class ScanlyApp extends StatelessWidget {
       ) {
         return MaterialApp.router(
           debugShowCheckedModeBanner: false,
-
           title: 'Scanly',
-
-          theme:
-              AppTheme.defaultTheme,
-
-          darkTheme:
-              AppTheme.darkTheme,
-
-          themeMode:
-              themeMode,
-
-          routerConfig:
-              AppRouter.router,
+          theme: AppTheme.defaultTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeMode,
+          routerConfig: AppRouter.router,
         );
       },
     );

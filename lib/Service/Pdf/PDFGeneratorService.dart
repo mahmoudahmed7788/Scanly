@@ -21,10 +21,6 @@ class PDFGeneratorService {
   static const MethodChannel _nativeChannel =
       MethodChannel('scanly/share');
 
-  // ============================================================
-  // PREPARE IMAGE
-  // ============================================================
-
   static PreparedImage? prepareImageSync(
     String path,
   ) {
@@ -35,7 +31,6 @@ class PDFGeneratorService {
         debugPrint(
           'IMAGE FILE DOES NOT EXIST: $path',
         );
-
         return null;
       }
 
@@ -74,7 +69,6 @@ class PDFGeneratorService {
       debugPrint(
         'PREPARE IMAGE ERROR: $e',
       );
-
       return null;
     }
   }
@@ -82,12 +76,11 @@ class PDFGeneratorService {
   static Future<PreparedImage?> prepareImage(
     String path,
   ) async {
-    return prepareImageSync(path);
+    return compute(
+      prepareImageSync,
+      path,
+    );
   }
-
-  // ============================================================
-  // PAGE FORMAT
-  // ============================================================
 
   static pdf.PdfPageFormat pageFormatForImage(
     int width,
@@ -105,10 +98,6 @@ class PDFGeneratorService {
       841.89,
     );
   }
-
-  // ============================================================
-  // ACTIVITY ITEM
-  // ============================================================
 
   static String itemId(
     String path,
@@ -131,10 +120,6 @@ class PDFGeneratorService {
           DateTime.now().millisecondsSinceEpoch,
     );
   }
-
-  // ============================================================
-  // SCANLY BRANDING
-  // ============================================================
 
   static pw.Widget buildScanlyBranding(
     Uint8List? logoBytes,
@@ -211,10 +196,6 @@ class PDFGeneratorService {
     );
   }
 
-  // ============================================================
-  // PUBLIC COPY
-  // ============================================================
-
   static Future<void> savePublicCopyInBackground({
     required String filePath,
     required String fileName,
@@ -240,10 +221,6 @@ class PDFGeneratorService {
     }
   }
 
-  // ============================================================
-  // BACKGROUND SAVE
-  // ============================================================
-
   static Future<void> finishBackgroundSave({
     required DocumentModel document,
     required ScanlyItem item,
@@ -253,33 +230,41 @@ class PDFGeneratorService {
       await DocumentStorage.saveDocument(
         document,
       );
+
+      debugPrint(
+        'PDF DOCUMENT SAVED TO SCANLY DOCUMENTS.',
+      );
     } catch (e) {
       debugPrint(
-        'BACKGROUND DOCUMENT SAVE ERROR: $e',
+        'DOCUMENT SAVE ERROR: $e',
       );
+      rethrow;
     }
 
     try {
       await ScanlyActivityService.addRecent(
         item,
       );
+
+      debugPrint(
+        'PDF ADDED TO RECENT.',
+      );
     } catch (e) {
       debugPrint(
-        'BACKGROUND ACTIVITY SAVE ERROR: $e',
+        'ACTIVITY SAVE ERROR: $e',
       );
     }
 
-    if (document.filePath != null) {
-      await savePublicCopyInBackground(
-        filePath: document.filePath!,
-        fileName: fileName,
+    if (document.filePath != null &&
+        document.filePath!.isNotEmpty) {
+      unawaited(
+        savePublicCopyInBackground(
+          filePath: document.filePath!,
+          fileName: fileName,
+        ),
       );
     }
   }
-
-  // ============================================================
-  // CREATE PDF
-  // ============================================================
 
   static Future<DocumentModel> createPdf({
     required List<String> imagePaths,
@@ -293,10 +278,6 @@ class PDFGeneratorService {
     }
 
     final pdfDocument = pw.Document();
-
-    // ==========================================================
-    // LOCAL DIRECTORY
-    // ==========================================================
 
     final appDirectory =
         await getApplicationDocumentsDirectory();
@@ -321,40 +302,42 @@ class PDFGeneratorService {
       recursive: true,
     );
 
-    final savedPageImagePaths = <String>[];
+    final preparedImages =
+        <PreparedImage?>[];
 
-    // ==========================================================
-    // PROCESS IMAGES
-    // ==========================================================
+    for (final imagePath in imagePaths) {
+      final prepared =
+          await prepareImage(imagePath);
+
+      preparedImages.add(prepared);
+    }
+
+    final savedPageImagePaths =
+        <String>[];
 
     for (
       int i = 0;
-      i < imagePaths.length;
+      i < preparedImages.length;
       i++
     ) {
-      final selectedPath = imagePaths[i];
-
-      final prepared = await prepareImage(
-        selectedPath,
-      );
+      final prepared =
+          preparedImages[i];
 
       if (prepared == null) {
         continue;
       }
 
-      final imageBytes = prepared.bytes;
-
-      // --------------------------------------------------------
-      // SAVE PAGE IMAGE
-      // --------------------------------------------------------
+      final imageBytes =
+          prepared.bytes;
 
       final pagePath =
           '${pagesDirectory.path}/'
           'page_'
-          '${(i + 1).toString().padLeft(3, '0')}'
+          '${(savedPageImagePaths.length + 1).toString().padLeft(3, '0')}'
           '.jpg';
 
-      final pageFile = File(pagePath);
+      final pageFile =
+          File(pagePath);
 
       await pageFile.writeAsBytes(
         imageBytes,
@@ -364,10 +347,6 @@ class PDFGeneratorService {
       savedPageImagePaths.add(
         pagePath,
       );
-
-      // --------------------------------------------------------
-      // ADD IMAGE TO PDF
-      // --------------------------------------------------------
 
       final pdfImage =
           pw.MemoryImage(imageBytes);
@@ -415,26 +394,14 @@ class PDFGeneratorService {
       );
     }
 
-    // ==========================================================
-    // VALIDATE
-    // ==========================================================
-
     if (savedPageImagePaths.isEmpty) {
       throw Exception(
         'No valid images were processed',
       );
     }
 
-    // ==========================================================
-    // GENERATE PDF
-    // ==========================================================
-
     final pdfBytes =
         await pdfDocument.save();
-
-    // ==========================================================
-    // PDF FILE NAME
-    // ==========================================================
 
     var fileName =
         '$documentName.pdf';
@@ -442,7 +409,8 @@ class PDFGeneratorService {
     var pdfPath =
         '${documentsDirectory.path}/$fileName';
 
-    var pdfFile = File(pdfPath);
+    var pdfFile =
+        File(pdfPath);
 
     int counter = 1;
 
@@ -453,19 +421,31 @@ class PDFGeneratorService {
       pdfPath =
           '${documentsDirectory.path}/$fileName';
 
-      pdfFile = File(pdfPath);
+      pdfFile =
+          File(pdfPath);
 
       counter++;
     }
 
     await pdfFile.writeAsBytes(
       pdfBytes,
-      flush: false,
+      flush: true,
     );
 
-    // ==========================================================
-    // DOCUMENT MODEL
-    // ==========================================================
+    if (!await pdfFile.exists()) {
+      throw Exception(
+        'PDF file was not created.',
+      );
+    }
+
+    final fileSize =
+        await pdfFile.length();
+
+    if (fileSize <= 0) {
+      throw Exception(
+        'PDF file is empty.',
+      );
+    }
 
     final documentId =
         pdfFile.path.hashCode.toString();
@@ -474,7 +454,8 @@ class PDFGeneratorService {
         DocumentModel(
       id: documentId,
       title: documentName,
-      date: DateTime.now().toIso8601String(),
+      date:
+          DateTime.now().toIso8601String(),
       type: 'pdf',
       filePath: pdfFile.path,
       isFavorite: false,

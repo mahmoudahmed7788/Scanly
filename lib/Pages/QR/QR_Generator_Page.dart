@@ -496,7 +496,7 @@ class _QRGeneratorPageState extends State<QRGeneratorPage> {
       if (currentlyFavorite) {
         await ScanlyActivityService
             .removeFavorite(
-          item.id,
+          item.id as ScanlyItem,
         );
 
         if (mounted) {

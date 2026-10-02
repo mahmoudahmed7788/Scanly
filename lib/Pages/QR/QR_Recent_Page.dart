@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:scanly/Core/ScanlyActivityService.dart';
 import 'package:scanly/Core/Scanly_Items.dart';
 import 'package:scanly/Pages/QR/QRPreviewPage.dart';
+import 'package:scanly/Service/Ads/AdService.dart';
 import 'package:scanly/Widgets/Qr/QRRecentEmptyState.dart';
 import 'package:scanly/Widgets/Qr/QRRecentItem.dart';
 
@@ -12,17 +13,10 @@ class QRRecentPage extends StatefulWidget {
   });
 
   @override
-  State<QRRecentPage> createState() =>
-      _QRRecentPageState();
+  State<QRRecentPage> createState() => _QRRecentPageState();
 }
 
-class _QRRecentPageState
-    extends State<QRRecentPage> {
-
-  // ============================================================
-  // INIT
-  // ============================================================
-
+class _QRRecentPageState extends State<QRRecentPage> {
   @override
   void initState() {
     super.initState();
@@ -31,10 +25,6 @@ class _QRRecentPageState
       _onActivityChanged,
     );
   }
-
-  // ============================================================
-  // DISPOSE
-  // ============================================================
 
   @override
   void dispose() {
@@ -45,10 +35,6 @@ class _QRRecentPageState
     super.dispose();
   }
 
-  // ============================================================
-  // ACTIVITY CHANGE
-  // ============================================================
-
   void _onActivityChanged() {
     if (!mounted) {
       return;
@@ -57,15 +43,17 @@ class _QRRecentPageState
     setState(() {});
   }
 
-  // ============================================================
-  // OPEN PREVIEW
-  // ============================================================
-
-  void _openPreview(
+  Future<void> _openPreview(
     BuildContext context,
     String value,
-  ) {
-    Navigator.push(
+  ) async {
+    await AdService.showInterstitialBeforeAction();
+
+    if (!context.mounted) {
+      return;
+    }
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => QRPreviewPage(
@@ -75,80 +63,42 @@ class _QRRecentPageState
     );
   }
 
-  // ============================================================
-  // TOGGLE FAVORITE
-  // ============================================================
-
   Future<void> _toggleFavorite(
-    String id,
+    ScanlyItem item,
   ) async {
-    final recentItems =
-        ScanlyActivityService.recent;
-
-    ScanlyItem? targetItem;
-
-    for (final item in recentItems) {
-      if (item.id == id) {
-        targetItem = item;
-        break;
-      }
-    }
-
-    if (targetItem == null) {
-      return;
-    }
-
-    /*
-     * IMPORTANT:
-     *
-     * We use ScanlyActivityService here.
-     *
-     * This means the favorite is NOT stored separately
-     * inside QRRecentPage.
-     *
-     * The same favorite will therefore be available in:
-     *
-     * - Main Favorites
-     * - QR Favorites
-     * - Home Favorites
-     * - Any other page using ScanlyActivityService
-     */
-    await ScanlyActivityService.toggleFavorite(
-      targetItem,
+    final isFavorite = ScanlyActivityService.isFavorite(
+      item.id,
     );
-  }
 
-  // ============================================================
-  // REMOVE FROM RECENT
-  // ============================================================
+    if (isFavorite) {
+      await ScanlyActivityService.removeFavorite(
+        item,
+      );
+    } else {
+      await ScanlyActivityService.addFavorite(
+        item,
+      );
+    }
+  }
 
   Future<void> _removeRecent(
-    String id,
+    ScanlyItem item,
   ) async {
     await ScanlyActivityService.removeRecent(
-      id,
+      item,
     );
   }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    final recent =
-        ScanlyActivityService.recent
-            .where(
-              (item) =>
-                  item.type == 'qr' &&
-                  item.data != null &&
-                  item.data!.isNotEmpty,
-            )
-            .toList();
-
-    // ============================================================
-    // EMPTY STATE
-    // ============================================================
+    final recent = ScanlyActivityService.recent
+        .where(
+          (item) =>
+              item.type == 'qr' &&
+              item.data != null &&
+              item.data!.isNotEmpty,
+        )
+        .toList();
 
     if (recent.isEmpty) {
       return const QRRecentEmptyState(
@@ -159,10 +109,6 @@ class _QRRecentPageState
       );
     }
 
-    // ============================================================
-    // RECENT LIST
-    // ============================================================
-
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(
         16,
@@ -171,24 +117,16 @@ class _QRRecentPageState
         24,
       ),
       itemCount: recent.length,
-      separatorBuilder: (_, __) =>
-          const SizedBox(height: 12),
+      separatorBuilder: (_, __) {
+        return const SizedBox(height: 12);
+      },
       itemBuilder: (
         context,
         index,
       ) {
         final item = recent[index];
-
         final value = item.data!;
 
-        /*
-         * IMPORTANT:
-         *
-         * This is read from the SAME global favorites list
-         * used by the rest of Scanly.
-         *
-         * So the heart always reflects the real global state.
-         */
         final isFavorite =
             ScanlyActivityService.isFavorite(
           item.id,
@@ -197,35 +135,20 @@ class _QRRecentPageState
         return QRRecentItem(
           value: value,
           isFavorite: isFavorite,
-
-          // ======================================================
-          // OPEN
-          // ======================================================
-
-          onTap: () {
-            _openPreview(
+          onTap: () async {
+            await _openPreview(
               context,
               value,
             );
           },
-
-          // ======================================================
-          // FAVORITE
-          // ======================================================
-
           onToggleFavorite: () async {
             await _toggleFavorite(
-              item.id,
+              item,
             );
           },
-
-          // ======================================================
-          // REMOVE RECENT
-          // ======================================================
-
           onRemove: () async {
             await _removeRecent(
-              item.id,
+              item,
             );
           },
         );

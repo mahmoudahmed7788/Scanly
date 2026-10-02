@@ -62,14 +62,12 @@ class ForgotPasswordVerificationPage
                   width: 110,
                   height: 110,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(
-                      0.18,
-                    ),
+                    color:
+                        Colors.white.withOpacity(0.18),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withOpacity(
-                        0.3,
-                      ),
+                      color:
+                          Colors.white.withOpacity(0.3),
                     ),
                   ),
                   child: const Icon(
@@ -94,7 +92,8 @@ class ForgotPasswordVerificationPage
                 const SizedBox(height: 12),
 
                 const Text(
-                  'We sent a password reset link to:',
+                  'If an account exists for this email, '
+                  'we sent a password reset link to:',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white70,
@@ -117,12 +116,12 @@ class ForgotPasswordVerificationPage
                 const SizedBox(height: 20),
 
                 Text(
-                  'Open the link in the email to create a new password for your Scanly account.',
+                  'Open the email and tap the reset link. '
+                  'Scanly will then let you create a new password.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(
-                      0.85,
-                    ),
+                    color:
+                        Colors.white.withOpacity(0.85),
                     fontSize: 14,
                     height: 1.5,
                   ),
@@ -132,7 +131,8 @@ class ForgotPasswordVerificationPage
 
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(22),
+                  padding:
+                      const EdgeInsets.all(22),
                   decoration: BoxDecoration(
                     color: isDark
                         ? const Color(0xFF1D1D29)
@@ -156,14 +156,16 @@ class ForgotPasswordVerificationPage
                         style: TextStyle(
                           color: textPrimary,
                           fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                          fontWeight:
+                              FontWeight.bold,
                         ),
                       ),
 
                       const SizedBox(height: 7),
 
                       Text(
-                        'Check your Spam or Junk folder and make sure the email address is correct.',
+                        'Check your Spam or Junk folder '
+                        'and make sure the email address is correct.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: textSecondary,
@@ -202,7 +204,8 @@ class ForgotPasswordVerificationPage
                             'Back to Login',
                             style: TextStyle(
                               fontSize: 15,
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
                         ),

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:scanly/Core/ScanlyActivityService.dart';
 import 'package:scanly/Core/Scanly_Items.dart';
-import 'package:scanly/core/ScanlyActivityService.dart';
+import 'package:scanly/Core/ScanlyItemOpener.dart';
+import 'package:scanly/Service/Ads/AdService.dart';
 
 class RecentPage extends StatefulWidget {
   const RecentPage({
@@ -19,16 +20,14 @@ class _RecentPageState
   void initState() {
     super.initState();
 
-    ScanlyActivityService.version.addListener(
-      _refresh,
-    );
+    ScanlyActivityService.version
+        .addListener(_refresh);
   }
 
   @override
   void dispose() {
-    ScanlyActivityService.version.removeListener(
-      _refresh,
-    );
+    ScanlyActivityService.version
+        .removeListener(_refresh);
 
     super.dispose();
   }
@@ -56,6 +55,7 @@ class _RecentPageState
         return Icons.document_scanner_rounded;
 
       case 'text':
+      case 'image_to_text':
         return Icons.text_snippet_rounded;
 
       default:
@@ -66,20 +66,40 @@ class _RecentPageState
   Future<void> _openItem(
     ScanlyItem item,
   ) async {
-    await ScanlyActivityService.addRecent(
-      item,
-    );
+    await AdService
+        .showInterstitialBeforeAction();
 
     if (!mounted) {
       return;
     }
 
-    if (item.route.isNotEmpty) {
-      await context.push(
-        item.route,
-        extra: item.data,
-      );
+    await ScanlyItemOpener.open(
+      context,
+      item,
+    );
+  }
+
+  Future<void> _toggleFavorite(
+    ScanlyItem item,
+  ) async {
+    final isFavorite =
+        ScanlyActivityService
+            .isFavorite(item.id);
+
+    if (isFavorite) {
+      await ScanlyActivityService
+          .removeFavorite(item);
+    } else {
+      await ScanlyActivityService
+          .addFavorite(item);
     }
+  }
+
+  Future<void> _removeRecent(
+    ScanlyItem item,
+  ) async {
+    await ScanlyActivityService
+        .removeRecent(item);
   }
 
   @override
@@ -87,55 +107,71 @@ class _RecentPageState
     BuildContext context,
   ) {
     final colors =
-        Theme.of(context).colorScheme;
+        Theme.of(context)
+            .colorScheme;
 
     final recent =
-        ScanlyActivityService.recent;
+        ScanlyActivityService
+            .recent;
 
     return Scaffold(
-      backgroundColor: colors.surface,
+      backgroundColor:
+          colors.surface,
       appBar: AppBar(
-        backgroundColor: colors.surface,
-        foregroundColor: colors.onSurface,
-        surfaceTintColor: Colors.transparent,
+        backgroundColor:
+            colors.surface,
+        foregroundColor:
+            colors.onSurface,
+        surfaceTintColor:
+            Colors.transparent,
         elevation: 0,
         title: const Text(
           'Recent',
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight:
+                FontWeight.bold,
           ),
         ),
         actions: [
           if (recent.isNotEmpty)
             IconButton(
-              tooltip: 'Clear recent',
+              tooltip:
+                  'Clear recent',
               onPressed: () async {
                 await ScanlyActivityService
                     .clearRecent();
               },
               icon: const Icon(
-                Icons.delete_sweep_rounded,
+                Icons
+                    .delete_sweep_rounded,
               ),
             ),
         ],
       ),
       body: recent.isEmpty
-          ? _buildEmptyState(context)
+          ? _buildEmptyState(
+              context,
+            )
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(
+              padding:
+                  const EdgeInsets
+                      .fromLTRB(
                 18,
                 12,
                 18,
                 30,
               ),
-              itemCount: recent.length,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(height: 10),
-              itemBuilder: (
-                context,
-                index,
-              ) {
-                final item = recent[index];
+              itemCount:
+                  recent.length,
+              separatorBuilder:
+                  (_, __) =>
+                      const SizedBox(
+                height: 10,
+              ),
+              itemBuilder:
+                  (context, index) {
+                final item =
+                    recent[index];
 
                 return _buildItemCard(
                   context,
@@ -151,93 +187,131 @@ class _RecentPageState
     ScanlyItem item,
   ) {
     final colors =
-        Theme.of(context).colorScheme;
+        Theme.of(context)
+            .colorScheme;
 
     final isFavorite =
-        ScanlyActivityService.isFavorite(
-      item.id,
-    );
+        ScanlyActivityService
+            .isFavorite(item.id);
 
     return Dismissible(
       key: ValueKey(
         'recent_${item.id}',
       ),
       direction:
-          DismissDirection.endToStart,
+          DismissDirection
+              .endToStart,
       background: Container(
-        alignment: Alignment.centerRight,
+        alignment:
+            Alignment.centerRight,
         padding:
-            const EdgeInsets.only(right: 20),
-        decoration: BoxDecoration(
-          color: Colors.redAccent,
+            const EdgeInsets.only(
+          right: 20,
+        ),
+        decoration:
+            BoxDecoration(
+          color:
+              Colors.redAccent,
           borderRadius:
-              BorderRadius.circular(18),
+              BorderRadius.circular(
+            18,
+          ),
         ),
         child: const Icon(
-          Icons.delete_outline_rounded,
+          Icons
+              .delete_outline_rounded,
           color: Colors.white,
         ),
       ),
-      onDismissed: (_) async {
-        await ScanlyActivityService
-            .removeRecent(item.id);
+      onDismissed:
+          (_) async {
+        await _removeRecent(
+          item,
+        );
       },
       child: Material(
-        color:
-            colors.surfaceContainerHighest,
+        color: colors
+            .surfaceContainerHighest,
         borderRadius:
-            BorderRadius.circular(18),
+            BorderRadius.circular(
+          18,
+        ),
         child: InkWell(
           borderRadius:
-              BorderRadius.circular(18),
-          onTap: () => _openItem(item),
+              BorderRadius.circular(
+            18,
+          ),
+          onTap: () =>
+              _openItem(item),
           child: Padding(
             padding:
-                const EdgeInsets.all(15),
+                const EdgeInsets.all(
+              15,
+            ),
             child: Row(
               children: [
                 Container(
                   width: 52,
                   height: 52,
-                  decoration: BoxDecoration(
-                    color: colors.secondary
-                        .withValues(alpha: 0.12),
+                  decoration:
+                      BoxDecoration(
+                    color: colors
+                        .secondary
+                        .withValues(
+                      alpha: 0.12,
+                    ),
                     borderRadius:
-                        BorderRadius.circular(15),
+                        BorderRadius.circular(
+                      15,
+                    ),
                   ),
                   child: Icon(
-                    _iconForType(item.type),
-                    color: colors.secondary,
+                    _iconForType(
+                      item.type,
+                    ),
+                    color: colors
+                        .secondary,
                     size: 26,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(
+                  width: 14,
+                ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        CrossAxisAlignment
+                            .start,
                     children: [
                       Text(
                         item.title,
                         maxLines: 1,
                         overflow:
-                            TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color:
-                              colors.onSurface,
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            TextStyle(
+                          color: colors
+                              .onSurface,
                           fontSize: 16,
                           fontWeight:
-                              FontWeight.bold,
+                              FontWeight
+                                  .bold,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(
+                        height: 4,
+                      ),
                       Text(
                         item.subtitle,
                         maxLines: 1,
                         overflow:
-                            TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.onSurface
+                            TextOverflow
+                                .ellipsis,
+                        style:
+                            TextStyle(
+                          color: colors
+                              .onSurface
                               .withValues(
                             alpha: 0.55,
                           ),
@@ -248,21 +322,22 @@ class _RecentPageState
                   ),
                 ),
                 IconButton(
-                  onPressed: () async {
-                    await ScanlyActivityService
-                        .toggleFavorite(item);
-                  },
+                  onPressed: () =>
+                      _toggleFavorite(
+                    item,
+                  ),
                   icon: Icon(
                     isFavorite
-                        ? Icons.favorite_rounded
+                        ? Icons
+                            .favorite_rounded
                         : Icons
                             .favorite_border_rounded,
                     color: isFavorite
                         ? colors.primary
                         : colors.onSurface
                             .withValues(
-                            alpha: 0.45,
-                          ),
+                          alpha: 0.45,
+                        ),
                   ),
                 ),
               ],
@@ -277,12 +352,15 @@ class _RecentPageState
     BuildContext context,
   ) {
     final colors =
-        Theme.of(context).colorScheme;
+        Theme.of(context)
+            .colorScheme;
 
     return Center(
       child: Padding(
         padding:
-            const EdgeInsets.all(30),
+            const EdgeInsets.all(
+          30,
+        ),
         child: Column(
           mainAxisSize:
               MainAxisSize.min,
@@ -290,34 +368,50 @@ class _RecentPageState
             Container(
               width: 90,
               height: 90,
-              decoration: BoxDecoration(
-                color: colors.secondary
-                    .withValues(alpha: 0.10),
-                shape: BoxShape.circle,
+              decoration:
+                  BoxDecoration(
+                color: colors
+                    .secondary
+                    .withValues(
+                  alpha: 0.10,
+                ),
+                shape:
+                    BoxShape.circle,
               ),
               child: Icon(
-                Icons.history_rounded,
+                Icons
+                    .history_rounded,
                 size: 46,
-                color: colors.secondary,
+                color: colors
+                    .secondary,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(
+              height: 18,
+            ),
             Text(
               'No Recent Items',
               style: TextStyle(
-                color: colors.onSurface,
+                color: colors
+                    .onSurface,
                 fontSize: 21,
                 fontWeight:
                     FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(
+              height: 8,
+            ),
             Text(
               'Items you open or create in Scanly will appear here.',
-              textAlign: TextAlign.center,
+              textAlign:
+                  TextAlign.center,
               style: TextStyle(
-                color: colors.onSurface
-                    .withValues(alpha: 0.55),
+                color: colors
+                    .onSurface
+                    .withValues(
+                  alpha: 0.55,
+                ),
                 fontSize: 14,
               ),
             ),

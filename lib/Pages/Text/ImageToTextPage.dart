@@ -27,19 +27,9 @@ class ImageToTextPage extends StatefulWidget {
 
 class _ImageToTextPageState
     extends State<ImageToTextPage> {
-  // =========================================================
-  // CONTROLLERS / SERVICES
-  // =========================================================
+  final ImagePicker _picker = ImagePicker();
 
-  final ImagePicker _picker =
-      ImagePicker();
-
-  final FlutterTts _flutterTts =
-      FlutterTts();
-
-  // =========================================================
-  // STATE
-  // =========================================================
+  final FlutterTts _flutterTts = FlutterTts();
 
   File? _selectedImage;
 
@@ -50,20 +40,12 @@ class _ImageToTextPageState
 
   String _selectedLanguage = 'eng';
 
-  // =========================================================
-  // LANGUAGES
-  // =========================================================
-
   final List<Map<String, String>> _languages = [
     {
       'code': 'eng',
       'name': 'English',
     },
   ];
-
-  // =========================================================
-  // DISPOSE
-  // =========================================================
 
   @override
   void dispose() {
@@ -72,16 +54,11 @@ class _ImageToTextPageState
     super.dispose();
   }
 
-  // =========================================================
-  // PICK IMAGE
-  // =========================================================
-
   Future<void> _pickImage(
     ImageSource source,
   ) async {
     try {
-      final XFile? image =
-          await _picker.pickImage(
+      final XFile? image = await _picker.pickImage(
         source: source,
         imageQuality: 100,
       );
@@ -97,11 +74,8 @@ class _ImageToTextPageState
       }
 
       setState(() {
-        _selectedImage =
-            File(image.path);
-
+        _selectedImage = File(image.path);
         _extractedText = '';
-
         _isSpeaking = false;
       });
     } catch (e) {
@@ -110,10 +84,6 @@ class _ImageToTextPageState
       );
     }
   }
-
-  // =========================================================
-  // IMAGE PICKER OPTIONS
-  // =========================================================
 
   void _showImagePickerOptions() {
     ImagePickerSheet.show(
@@ -131,10 +101,6 @@ class _ImageToTextPageState
     );
   }
 
-  // =========================================================
-  // EXTRACT TEXT
-  // =========================================================
-
   Future<void> _extractText() async {
     if (_selectedImage == null) {
       _showMessage(
@@ -148,8 +114,13 @@ class _ImageToTextPageState
       return;
     }
 
-    FocusManager.instance.primaryFocus
-        ?.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    await AdService.showInterstitialBeforeAction();
+
+    if (!mounted) {
+      return;
+    }
 
     setState(() {
       _isExtracting = true;
@@ -157,10 +128,6 @@ class _ImageToTextPageState
     });
 
     try {
-      debugPrint(
-        '==============================================',
-      );
-
       debugPrint(
         'ML KIT OCR START',
       );
@@ -173,13 +140,8 @@ class _ImageToTextPageState
         'Language: $_selectedLanguage',
       );
 
-      // ======================================================
-      // OCR
-      // ======================================================
-
       final String result =
-          await ImageTextRecognizerService
-              .extractText(
+          await ImageTextRecognizerService.extractText(
         _selectedImage!.path,
       );
 
@@ -197,10 +159,6 @@ class _ImageToTextPageState
         'ML KIT OCR SUCCESS',
       );
 
-      debugPrint(
-        '==============================================',
-      );
-
       if (!mounted) {
         return;
       }
@@ -208,10 +166,6 @@ class _ImageToTextPageState
       setState(() {
         _extractedText = result;
       });
-
-      // ======================================================
-      // EMPTY RESULT
-      // ======================================================
 
       if (result.trim().isEmpty) {
         _showMessage(
@@ -221,24 +175,10 @@ class _ImageToTextPageState
         return;
       }
 
-      // ======================================================
-      // SUCCESS
-      // ======================================================
-
       _showMessage(
         'Text extracted successfully.',
       );
-
-      // ======================================================
-      // INTERSTITIAL AD
-      // ======================================================
-
-      await AdService.showInterstitial();
     } on PlatformException catch (e) {
-      debugPrint(
-        '==============================================',
-      );
-
       debugPrint(
         'ML KIT OCR ERROR',
       );
@@ -255,10 +195,6 @@ class _ImageToTextPageState
         'Details: ${e.details}',
       );
 
-      debugPrint(
-        '==============================================',
-      );
-
       if (mounted) {
         _showMessage(
           e.message ??
@@ -267,19 +203,11 @@ class _ImageToTextPageState
       }
     } catch (e) {
       debugPrint(
-        '==============================================',
-      );
-
-      debugPrint(
         'ML KIT OCR ERROR',
       );
 
       debugPrint(
         e.toString(),
-      );
-
-      debugPrint(
-        '==============================================',
       );
 
       if (mounted) {
@@ -295,10 +223,6 @@ class _ImageToTextPageState
       }
     }
   }
-
-  // =========================================================
-  // COPY TEXT
-  // =========================================================
 
   Future<void> _copyText() async {
     if (_extractedText.trim().isEmpty) {
@@ -319,10 +243,6 @@ class _ImageToTextPageState
       'Text copied to clipboard.',
     );
   }
-
-  // =========================================================
-  // TEXT TO SPEECH
-  // =========================================================
 
   Future<void> _toggleSpeech() async {
     if (_extractedText.trim().isEmpty) {
@@ -378,10 +298,6 @@ class _ImageToTextPageState
     }
   }
 
-  // =========================================================
-  // CLEAR
-  // =========================================================
-
   Future<void> _clearAll() async {
     await _flutterTts.stop();
 
@@ -397,10 +313,6 @@ class _ImageToTextPageState
     });
   }
 
-  // =========================================================
-  // MESSAGE
-  // =========================================================
-
   void _showMessage(
     String message,
   ) {
@@ -413,64 +325,42 @@ class _ImageToTextPageState
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          behavior:
-              SnackBarBehavior.floating,
-          duration:
-              const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
         ),
       );
   }
-
-  // =========================================================
-  // BUILD
-  // =========================================================
 
   @override
   Widget build(
     BuildContext context,
   ) {
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
-    final colors =
-        theme.colorScheme;
+    final colors = theme.colorScheme;
 
     final isDark =
-        theme.brightness ==
-            Brightness.dark;
+        theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor:
           theme.scaffoldBackgroundColor,
-
-      // =====================================================
-      // APP BAR
-      // =====================================================
-
       appBar: AppBar(
-        backgroundColor:
-            colors.primary,
-        foregroundColor:
-            colors.onPrimary,
-        surfaceTintColor:
-            Colors.transparent,
+        backgroundColor: colors.primary,
+        foregroundColor: colors.onPrimary,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-
         title: const Text(
           'Image to Text',
           style: TextStyle(
-            fontWeight:
-                FontWeight.bold,
+            fontWeight: FontWeight.bold,
           ),
         ),
-
         actions: [
           if (_selectedImage != null)
             IconButton(
               onPressed:
-                  _isExtracting
-                      ? null
-                      : _clearAll,
+                  _isExtracting ? null : _clearAll,
               icon: const Icon(
                 Icons.delete_outline,
               ),
@@ -478,154 +368,88 @@ class _ImageToTextPageState
             ),
         ],
       ),
-
-      // =====================================================
-      // BODY
-      // =====================================================
-
       body: SafeArea(
         child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.all(20),
-
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment:
                 CrossAxisAlignment.stretch,
-
             children: [
-
-              // =================================================
-              // IMAGE
-              // =================================================
-
               if (_selectedImage == null)
                 GestureDetector(
                   onTap:
                       _showImagePickerOptions,
-
                   child: Container(
                     height: 280,
-
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          colors.surface,
-
+                    decoration: BoxDecoration(
+                      color: colors.surface,
                       borderRadius:
-                          BorderRadius.circular(
-                        20,
-                      ),
-
-                      border:
-                          Border.all(
-                        color:
-                            colors.outline
-                                .withOpacity(
-                          isDark
-                              ? 0.35
-                              : 0.25,
+                          BorderRadius.circular(20),
+                      border: Border.all(
+                        color: colors.outline
+                            .withOpacity(
+                          isDark ? 0.35 : 0.25,
                         ),
                       ),
-
                       boxShadow: [
                         BoxShadow(
-                          color:
-                              Colors.black
-                                  .withOpacity(
-                            isDark
-                                ? 0.20
-                                : 0.05,
+                          color: Colors.black
+                              .withOpacity(
+                            isDark ? 0.20 : 0.05,
                           ),
                           blurRadius: 12,
                           offset:
-                              const Offset(
-                            0,
-                            5,
-                          ),
+                              const Offset(0, 5),
                         ),
                       ],
                     ),
-
                     child:
                         const ImageToTextEmptyState(),
                   ),
                 )
               else
                 ImageToTextImagePreview(
-                  image:
-                      _selectedImage!,
+                  image: _selectedImage!,
                   onTap:
                       _showImagePickerOptions,
                 ),
-
               const SizedBox(
                 height: 20,
               ),
-
-              // =================================================
-              // LANGUAGE
-              // =================================================
-
               ImageToTextLanguageDropdown(
                 selectedLanguage:
                     _selectedLanguage,
-                languages:
-                    _languages,
-                disabled:
-                    _isExtracting,
+                languages: _languages,
+                disabled: _isExtracting,
                 onChanged: (value) {
                   if (value == null) {
                     return;
                   }
 
                   setState(() {
-                    _selectedLanguage =
-                        value;
+                    _selectedLanguage = value;
                   });
                 },
               ),
-
               const SizedBox(
                 height: 16,
               ),
-
-              // =================================================
-              // EXTRACT
-              // =================================================
-
               ExtractTextButton(
-                isExtracting:
-                    _isExtracting,
-                onPressed:
-                    _extractText,
+                isExtracting: _isExtracting,
+                onPressed: _extractText,
               ),
-
               const SizedBox(
                 height: 24,
               ),
-
-              // =================================================
-              // RESULT
-              // =================================================
-
               if (_extractedText
                   .trim()
                   .isNotEmpty)
                 ExtractedTextCard(
-                  text:
-                      _extractedText,
-                  isSpeaking:
-                      _isSpeaking,
-                  onCopy:
-                      _copyText,
-                  onSpeech:
-                      _toggleSpeech,
+                  text: _extractedText,
+                  isSpeaking: _isSpeaking,
+                  onCopy: _copyText,
+                  onSpeech: _toggleSpeech,
                 ),
-
-              // =================================================
-              // EMPTY MESSAGE
-              // =================================================
-
               if (_selectedImage != null &&
                   _extractedText
                       .trim()
@@ -636,18 +460,13 @@ class _ImageToTextPageState
                       const EdgeInsets.only(
                     top: 8,
                   ),
-
                   child: Text(
                     'Select an image and tap Extract Text.',
                     textAlign:
                         TextAlign.center,
-                    style:
-                        TextStyle(
-                      color:
-                          colors.onSurface
-                              .withOpacity(
-                        0.55,
-                      ),
+                    style: TextStyle(
+                      color: colors.onSurface
+                          .withOpacity(0.55),
                     ),
                   ),
                 ),

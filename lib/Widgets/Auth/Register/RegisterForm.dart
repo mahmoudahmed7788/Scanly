@@ -33,6 +33,234 @@ class RegisterForm extends StatelessWidget {
     required this.onRegister,
   });
 
+  // ============================================================
+  // PASSWORD CONDITIONS
+  // ============================================================
+
+  bool _hasMinimumLength(String password) {
+    return password.length >= 8;
+  }
+
+  bool _hasUppercase(String password) {
+    return RegExp(r'[A-Z]').hasMatch(password);
+  }
+
+  bool _hasLowercase(String password) {
+    return RegExp(r'[a-z]').hasMatch(password);
+  }
+
+  bool _hasNumber(String password) {
+    return RegExp(r'[0-9]').hasMatch(password);
+  }
+
+  bool _hasSpecialCharacter(String password) {
+    return RegExp(
+      r'''[!@#$%^&*(),.?":{}|<>_\-\\/\[\]+=]''',
+    ).hasMatch(password);
+  }
+
+  bool _hasNoSpaces(String password) {
+    return !password.contains(RegExp(r'\s'));
+  }
+
+  bool _isStrongPassword(String password) {
+    return _hasMinimumLength(password) &&
+        _hasUppercase(password) &&
+        _hasLowercase(password) &&
+        _hasNumber(password) &&
+        _hasSpecialCharacter(password) &&
+        _hasNoSpaces(password);
+  }
+
+  // ============================================================
+  // PASSWORD REQUIREMENT ITEM
+  // ============================================================
+
+  Widget _passwordRequirement({
+    required String text,
+    required bool valid,
+    required bool isDark,
+  }) {
+    final color = valid
+        ? Colors.green
+        : (isDark
+            ? const Color(0xFFB8B6CC)
+            : const Color(0xFF77738F));
+
+    return Padding(
+      padding: const EdgeInsets.only(
+        bottom: 7,
+      ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.center,
+        children: [
+          AnimatedSwitcher(
+            duration:
+                const Duration(milliseconds: 180),
+            child: Icon(
+              valid
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              key: ValueKey(valid),
+              size: 17,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: color,
+                fontSize: 12.5,
+                fontWeight: valid
+                    ? FontWeight.w600
+                    : FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // PASSWORD REQUIREMENTS
+  // ============================================================
+
+  Widget _buildPasswordRequirements(
+    BuildContext context,
+  ) {
+    final theme = Theme.of(context);
+
+    final isDark =
+        theme.brightness == Brightness.dark;
+
+    return AnimatedBuilder(
+      animation: passwordController,
+      builder: (context, child) {
+        final password =
+            passwordController.text;
+
+        final hasStarted =
+            password.isNotEmpty;
+
+        return AnimatedSize(
+          duration:
+              const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: hasStarted
+              ? Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(
+                    top: 10,
+                  ),
+                  padding:
+                      const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF252533)
+                        : const Color(0xFFF7F7FC),
+                    borderRadius:
+                        BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF3A394B)
+                          : const Color(0xFFE5E4F0),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Password requirements',
+                        style: TextStyle(
+                          color: theme
+                              .colorScheme
+                              .onSurface,
+                          fontSize: 13,
+                          fontWeight:
+                              FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 10,
+                      ),
+
+                      _passwordRequirement(
+                        text:
+                            'At least 8 characters',
+                        valid:
+                            _hasMinimumLength(
+                          password,
+                        ),
+                        isDark: isDark,
+                      ),
+
+                      _passwordRequirement(
+                        text:
+                            'One uppercase letter (A-Z)',
+                        valid:
+                            _hasUppercase(
+                          password,
+                        ),
+                        isDark: isDark,
+                      ),
+
+                      _passwordRequirement(
+                        text:
+                            'One lowercase letter (a-z)',
+                        valid:
+                            _hasLowercase(
+                          password,
+                        ),
+                        isDark: isDark,
+                      ),
+
+                      _passwordRequirement(
+                        text:
+                            'One number (0-9)',
+                        valid:
+                            _hasNumber(
+                          password,
+                        ),
+                        isDark: isDark,
+                      ),
+
+                      _passwordRequirement(
+                        text:
+                            'One special character (!@#\$...)',
+                        valid:
+                            _hasSpecialCharacter(
+                          password,
+                        ),
+                        isDark: isDark,
+                      ),
+
+                      _passwordRequirement(
+                        text:
+                            'No spaces',
+                        valid:
+                            _hasNoSpaces(
+                          password,
+                        ),
+                        isDark: isDark,
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -43,7 +271,8 @@ class RegisterForm extends StatelessWidget {
 
         TextFormField(
           controller: firstNameController,
-          textInputAction: TextInputAction.next,
+          textInputAction:
+              TextInputAction.next,
           decoration: const InputDecoration(
             hintText: 'First Name',
             prefixIcon: Icon(
@@ -68,7 +297,8 @@ class RegisterForm extends StatelessWidget {
 
         TextFormField(
           controller: lastNameController,
-          textInputAction: TextInputAction.next,
+          textInputAction:
+              TextInputAction.next,
           decoration: const InputDecoration(
             hintText: 'Last Name',
             prefixIcon: Icon(
@@ -140,7 +370,8 @@ class RegisterForm extends StatelessWidget {
               Icons.lock_outline_rounded,
             ),
             suffixIcon: IconButton(
-              onPressed: onTogglePassword,
+              onPressed:
+                  onTogglePassword,
               icon: Icon(
                 obscurePassword
                     ? Icons.visibility_off_outlined
@@ -148,18 +379,31 @@ class RegisterForm extends StatelessWidget {
               ),
             ),
           ),
+          onChanged: (_) {
+            // The controller listener used by
+            // AnimatedBuilder will rebuild
+            // the requirements section.
+          },
           validator: (value) {
             if (value == null ||
                 value.isEmpty) {
               return 'Enter your password';
             }
 
-            if (value.length < 6) {
-              return 'Password must be at least 6 characters';
+            if (!_isStrongPassword(value)) {
+              return 'Password does not meet all requirements';
             }
 
             return null;
           },
+        ),
+
+        // ==========================================================
+        // PASSWORD REQUIREMENTS
+        // ==========================================================
+
+        _buildPasswordRequirements(
+          context,
         ),
 
         const SizedBox(height: 15),
