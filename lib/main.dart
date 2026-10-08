@@ -4,43 +4,24 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:scanly/App-Router.dart';
 import 'package:scanly/Auth/Auth_Cubit.dart';
 import 'package:scanly/Core/App_Theme.dart';
 import 'package:scanly/Core/DocumentStorage.dart';
 import 'package:scanly/Service/Ads/AdService.dart';
 import 'package:scanly/Service/Firebase/firebase_options.dart';
-import 'package:scanly/core/ScanlyActivityService.dart';
+import 'package:scanly/Core/ScanlyActivityService.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await _initializeFirebase();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   runApp(
     const ScanlyBootstrap(),
   );
-}
-
-Future<void> _initializeFirebase() async {
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-
-    debugPrint(
-      'Firebase initialized successfully.',
-    );
-  } catch (e, stackTrace) {
-    debugPrint(
-      'Firebase initialization error: $e',
-    );
-
-    debugPrint(
-      '$stackTrace',
-    );
-  }
 }
 
 class ScanlyBootstrap extends StatefulWidget {
@@ -49,20 +30,34 @@ class ScanlyBootstrap extends StatefulWidget {
   });
 
   @override
-  State<ScanlyBootstrap> createState() => _ScanlyBootstrapState();
+  State<ScanlyBootstrap> createState() =>
+      _ScanlyBootstrapState();
 }
 
-class _ScanlyBootstrapState extends State<ScanlyBootstrap> {
+class _ScanlyBootstrapState
+    extends State<ScanlyBootstrap> {
+  bool _backgroundStarted = false;
+
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback(
       (_) {
-        unawaited(
-          _initializeBackgroundServices(),
-        );
+        _startBackgroundServices();
       },
+    );
+  }
+
+  void _startBackgroundServices() {
+    if (_backgroundStarted) {
+      return;
+    }
+
+    _backgroundStarted = true;
+
+    unawaited(
+      _initializeBackgroundServices(),
     );
   }
 
@@ -76,10 +71,8 @@ class _ScanlyBootstrapState extends State<ScanlyBootstrap> {
 }
 
 Future<void> _initializeBackgroundServices() async {
-  await _initTheme();
-
-  await Future<void>.delayed(
-    const Duration(milliseconds: 100),
+  unawaited(
+    _initTheme(),
   );
 
   unawaited(
@@ -187,7 +180,8 @@ Future<void> _initSupabase() async {
       'SUPABASE_URL',
     );
 
-    const supabasePublishableKey = String.fromEnvironment(
+    const supabasePublishableKey =
+        String.fromEnvironment(
       'SUPABASE_PUBLISHABLE_KEY',
     );
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:scanly/Core/Scanly_Items.dart';
@@ -9,14 +11,14 @@ class ScanlyActivityService {
   static final List<ScanlyItem> _recent = [];
   static final List<TrashItem> _trash = [];
 
-  static final ValueNotifier<int> version =
-      ValueNotifier<int>(0);
+  static final ValueNotifier<int> version = ValueNotifier<int>(0);
 
   static bool _initialized = false;
   static bool _initializing = false;
   static bool _authListenerStarted = false;
-
   static String? _activeUid;
+
+  static Future<void>? _initializationFuture;
 
   static List<ScanlyItem> get favorites {
     return List.unmodifiable(_favorites);
@@ -42,86 +44,136 @@ class ScanlyActivityService {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      _clearMemory();
-
+      resetForLogout();
       return;
     }
 
     final uid = user.uid;
 
-    if (_activeUid != null &&
-        _activeUid != uid) {
+    if (_activeUid != null && _activeUid != uid) {
       _clearMemory();
-
       _initialized = false;
     }
 
-    if (_initializing) {
+    if (_initializing && _initializationFuture != null) {
+      await _initializationFuture;
       return;
     }
 
-    if (_initialized &&
-        !force &&
-        _activeUid == uid) {
+    if (_initialized && !force && _activeUid == uid) {
       await _removeExpiredTrash();
-
       return;
     }
 
-    _initializing = true;
     _activeUid = uid;
+    _initializing = true;
+
+    final future = _initializeLocal(uid);
+    _initializationFuture = future;
 
     try {
+      await future;
+    } finally {
+      if (identical(_initializationFuture, future)) {
+        _initializationFuture = null;
+        _initializing = false;
+      }
+    }
+  }
+
+  static Future<void> _initializeLocal(String uid) async {
+    try {
       await _loadLocal();
+
+      if (_activeUid != uid ||
+          FirebaseAuth.instance.currentUser?.uid != uid) {
+        return;
+      }
 
       await _removeExpiredTrash(
         notify: false,
       );
 
-      try {
-        final cloudFavorites =
-            await ActivityCloudStorage.loadFavorites();
-
-        final cloudRecent =
-            await ActivityCloudStorage.loadRecent();
-
-        final cloudTrash =
-            await ActivityCloudStorage.loadTrash();
-
-        _mergeFavorites(
-          cloudFavorites,
-        );
-
-        _mergeRecent(
-          cloudRecent,
-        );
-
-        _mergeTrash(
-          cloudTrash,
-        );
-
-        await _removeExpiredTrash(
-          notify: false,
-        );
-
-        await _saveLocal();
-
-        await _uploadMissingItems(
-          cloudFavorites,
-          cloudRecent,
-          cloudTrash,
-        );
-      } catch (e) {
-        debugPrint(
-          'Activity cloud sync error: $e',
-        );
-      }
-
       _initialized = true;
 
       _notify();
-    } finally {
-      _initializing = false;
+
+      unawaited(
+        _syncFromCloudInBackground(),
+      );
+    } catch (e) {
+      debugPrint(
+        'Activity local initialization error: $e',
+      );
+      rethrow;
+    }
+  }
+
+  static Future<void> _syncFromCloudInBackground() async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    if (_activeUid != uid) {
+      return;
+    }
+
+    try {
+      final cloudFavorites =
+          await ActivityCloudStorage.loadFavorites();
+
+      final cloudRecent =
+          await ActivityCloudStorage.loadRecent();
+
+      final cloudTrash =
+          await ActivityCloudStorage.loadTrash();
+
+      if (_activeUid != uid ||
+          FirebaseAuth.instance.currentUser?.uid != uid) {
+        return;
+      }
+
+      _mergeTrash(
+        cloudTrash,
+      );
+
+      await _removeExpiredTrash(
+        notify: false,
+      );
+
+      final trashedIds = _trash
+          .map(
+            (item) => item.item.id,
+          )
+          .toSet();
+
+      _mergeFavorites(
+        cloudFavorites,
+        excludedIds: trashedIds,
+      );
+
+      _mergeRecent(
+        cloudRecent,
+        excludedIds: trashedIds,
+      );
+
+      await _removeItemsThatAreInTrash();
+
+      await _saveLocal();
+
+      await _uploadMissingItems(
+        cloudFavorites,
+        cloudRecent,
+        cloudTrash,
+      );
+
+      _notify();
+    } catch (e) {
+      debugPrint(
+        'Activity background cloud sync error: $e',
+      );
     }
   }
 
@@ -144,6 +196,7 @@ class ScanlyActivityService {
     _activeUid = null;
     _initialized = false;
     _initializing = false;
+    _initializationFuture = null;
 
     _notify();
   }
@@ -159,19 +212,16 @@ class ScanlyActivityService {
       (user) async {
         if (user == null) {
           resetForLogout();
-
           return;
         }
 
         final uid = user.uid;
 
-        if (_activeUid == uid &&
-            _initialized) {
+        if (_activeUid == uid && _initialized) {
           return;
         }
 
-        if (_activeUid != null &&
-            _activeUid != uid) {
+        if (_activeUid != null && _activeUid != uid) {
           _clearMemory();
 
           _initialized = false;
@@ -220,6 +270,8 @@ class ScanlyActivityService {
       ..clear()
       ..addAll(localTrash);
 
+    await _removeItemsThatAreInTrash();
+
     _recent.sort(
       (a, b) => b.createdAt.compareTo(
         a.createdAt,
@@ -263,8 +315,9 @@ class ScanlyActivityService {
   }
 
   static void _mergeFavorites(
-    List<ScanlyItem> items,
-  ) {
+    List<ScanlyItem> items, {
+    Set<String> excludedIds = const {},
+  }) {
     final existingIds = _favorites
         .map(
           (item) => item.id,
@@ -272,6 +325,10 @@ class ScanlyActivityService {
         .toSet();
 
     for (final item in items) {
+      if (excludedIds.contains(item.id)) {
+        continue;
+      }
+
       if (!existingIds.contains(item.id)) {
         _favorites.add(item);
       }
@@ -279,8 +336,9 @@ class ScanlyActivityService {
   }
 
   static void _mergeRecent(
-    List<ScanlyItem> items,
-  ) {
+    List<ScanlyItem> items, {
+    Set<String> excludedIds = const {},
+  }) {
     final existingIds = _recent
         .map(
           (item) => item.id,
@@ -288,6 +346,10 @@ class ScanlyActivityService {
         .toSet();
 
     for (final item in items) {
+      if (excludedIds.contains(item.id)) {
+        continue;
+      }
+
       if (!existingIds.contains(item.id)) {
         _recent.add(item);
       }
@@ -317,9 +379,7 @@ class ScanlyActivityService {
         .toSet();
 
     for (final item in items) {
-      if (!existingIds.contains(
-        item.item.id,
-      )) {
+      if (!existingIds.contains(item.item.id)) {
         _trash.add(item);
       }
     }
@@ -331,36 +391,61 @@ class ScanlyActivityService {
     );
   }
 
+  static Future<void> _removeItemsThatAreInTrash() async {
+    final trashIds = _trash
+        .map(
+          (item) => item.item.id,
+        )
+        .toSet();
+
+    if (trashIds.isEmpty) {
+      return;
+    }
+
+    _favorites.removeWhere(
+      (item) => trashIds.contains(item.id),
+    );
+
+    _recent.removeWhere(
+      (item) => trashIds.contains(item.id),
+    );
+  }
+
   static Future<void> _uploadMissingItems(
     List<ScanlyItem> cloudFavorites,
     List<ScanlyItem> cloudRecent,
     List<TrashItem> cloudTrash,
   ) async {
-    final cloudFavoriteIds =
-        cloudFavorites
-            .map(
-              (item) => item.id,
-            )
-            .toSet();
+    final cloudFavoriteIds = cloudFavorites
+        .map(
+          (item) => item.id,
+        )
+        .toSet();
 
-    final cloudRecentIds =
-        cloudRecent
-            .map(
-              (item) => item.id,
-            )
-            .toSet();
+    final cloudRecentIds = cloudRecent
+        .map(
+          (item) => item.id,
+        )
+        .toSet();
 
-    final cloudTrashIds =
-        cloudTrash
-            .map(
-              (item) => item.item.id,
-            )
-            .toSet();
+    final cloudTrashIds = cloudTrash
+        .map(
+          (item) => item.item.id,
+        )
+        .toSet();
+
+    final localTrashIds = _trash
+        .map(
+          (item) => item.item.id,
+        )
+        .toSet();
 
     for (final item in _favorites) {
-      if (!cloudFavoriteIds.contains(
-        item.id,
-      )) {
+      if (localTrashIds.contains(item.id)) {
+        continue;
+      }
+
+      if (!cloudFavoriteIds.contains(item.id)) {
         try {
           await ActivityCloudStorage.saveFavorite(
             item,
@@ -370,9 +455,11 @@ class ScanlyActivityService {
     }
 
     for (final item in _recent) {
-      if (!cloudRecentIds.contains(
-        item.id,
-      )) {
+      if (localTrashIds.contains(item.id)) {
+        continue;
+      }
+
+      if (!cloudRecentIds.contains(item.id)) {
         try {
           await ActivityCloudStorage.saveRecent(
             item,
@@ -382,15 +469,25 @@ class ScanlyActivityService {
     }
 
     for (final item in _trash) {
-      if (!cloudTrashIds.contains(
-        item.item.id,
-      )) {
+      if (!cloudTrashIds.contains(item.item.id)) {
         try {
           await ActivityCloudStorage.saveTrash(
             item,
           );
         } catch (_) {}
       }
+
+      try {
+        await ActivityCloudStorage.deleteFavorite(
+          item.item.id,
+        );
+      } catch (_) {}
+
+      try {
+        await ActivityCloudStorage.deleteRecent(
+          item.item.id,
+        );
+      } catch (_) {}
     }
   }
 
@@ -427,6 +524,10 @@ class ScanlyActivityService {
 
     await init();
 
+    _trash.removeWhere(
+      (trashItem) => trashItem.item.id == item.id,
+    );
+
     _favorites.removeWhere(
       (existing) => existing.id == item.id,
     );
@@ -434,10 +535,6 @@ class ScanlyActivityService {
     _favorites.insert(
       0,
       item,
-    );
-
-    _trash.removeWhere(
-      (trashItem) => trashItem.item.id == item.id,
     );
 
     await ActivityLocalStorage.saveFavorites(
@@ -448,6 +545,18 @@ class ScanlyActivityService {
       _trash,
     );
 
+    _notify();
+
+    unawaited(
+      _syncFavoriteToCloud(
+        item,
+      ),
+    );
+  }
+
+  static Future<void> _syncFavoriteToCloud(
+    ScanlyItem item,
+  ) async {
     try {
       await ActivityCloudStorage.saveFavorite(
         item,
@@ -457,8 +566,6 @@ class ScanlyActivityService {
         item.id,
       );
     } catch (_) {}
-
-    _notify();
   }
 
   static Future<void> removeFavorite(
@@ -476,6 +583,10 @@ class ScanlyActivityService {
 
     await init();
 
+    _trash.removeWhere(
+      (trashItem) => trashItem.item.id == item.id,
+    );
+
     _recent.removeWhere(
       (existing) => existing.id == item.id,
     );
@@ -492,10 +603,6 @@ class ScanlyActivityService {
       );
     }
 
-    _trash.removeWhere(
-      (trashItem) => trashItem.item.id == item.id,
-    );
-
     await ActivityLocalStorage.saveRecent(
       _recent,
     );
@@ -504,6 +611,18 @@ class ScanlyActivityService {
       _trash,
     );
 
+    _notify();
+
+    unawaited(
+      _syncRecentToCloud(
+        item,
+      ),
+    );
+  }
+
+  static Future<void> _syncRecentToCloud(
+    ScanlyItem item,
+  ) async {
     try {
       await ActivityCloudStorage.saveRecent(
         item,
@@ -513,8 +632,6 @@ class ScanlyActivityService {
         item.id,
       );
     } catch (_) {}
-
-    _notify();
   }
 
   static Future<void> removeRecent(
@@ -556,8 +673,7 @@ class ScanlyActivityService {
       item: item,
       wasFavorite: wasFavorite,
       wasRecent: wasRecent,
-      deletedAt:
-          DateTime.now().millisecondsSinceEpoch,
+      deletedAt: DateTime.now().millisecondsSinceEpoch,
     );
 
     _trash.insert(
@@ -567,6 +683,24 @@ class ScanlyActivityService {
 
     await _saveLocal();
 
+    _notify();
+
+    unawaited(
+      _syncMoveToTrashToCloud(
+        item,
+        wasFavorite,
+        wasRecent,
+        trashItem,
+      ),
+    );
+  }
+
+  static Future<void> _syncMoveToTrashToCloud(
+    ScanlyItem item,
+    bool wasFavorite,
+    bool wasRecent,
+    TrashItem trashItem,
+  ) async {
     try {
       if (wasFavorite) {
         await ActivityCloudStorage.deleteFavorite(
@@ -584,8 +718,6 @@ class ScanlyActivityService {
         trashItem,
       );
     } catch (_) {}
-
-    _notify();
   }
 
   static Future<void> restoreTrashItem(
@@ -645,9 +777,21 @@ class ScanlyActivityService {
 
     await _saveLocal();
 
+    _notify();
+
+    unawaited(
+      _syncRestoreToCloud(
+        trashItem,
+      ),
+    );
+  }
+
+  static Future<void> _syncRestoreToCloud(
+    TrashItem trashItem,
+  ) async {
     try {
       await ActivityCloudStorage.deleteTrash(
-        id,
+        trashItem.item.id,
       );
 
       if (trashItem.wasFavorite) {
@@ -662,8 +806,6 @@ class ScanlyActivityService {
         );
       }
     } catch (_) {}
-
-    _notify();
   }
 
   static Future<void> deleteTrashItem(
@@ -683,13 +825,23 @@ class ScanlyActivityService {
       _trash,
     );
 
+    _notify();
+
+    unawaited(
+      _deleteTrashFromCloud(
+        id,
+      ),
+    );
+  }
+
+  static Future<void> _deleteTrashFromCloud(
+    String id,
+  ) async {
     try {
       await ActivityCloudStorage.deleteTrash(
         id,
       );
     } catch (_) {}
-
-    _notify();
   }
 
   static Future<void> clearTrash() async {
@@ -703,11 +855,17 @@ class ScanlyActivityService {
 
     await ActivityLocalStorage.clearTrash();
 
+    _notify();
+
+    unawaited(
+      _clearTrashFromCloud(),
+    );
+  }
+
+  static Future<void> _clearTrashFromCloud() async {
     try {
       await ActivityCloudStorage.clearTrash();
     } catch (_) {}
-
-    _notify();
   }
 
   static Future<void> _removeExpiredTrash({
@@ -729,11 +887,11 @@ class ScanlyActivityService {
             trashItem.item.id == item.item.id,
       );
 
-      try {
-        await ActivityCloudStorage.deleteTrash(
+      unawaited(
+        _deleteTrashFromCloud(
           item.item.id,
-        );
-      } catch (_) {}
+        ),
+      );
     }
 
     await ActivityLocalStorage.saveTrash(
@@ -790,8 +948,7 @@ class ScanlyActivityService {
   static Future<void> clearQrFavorites() async {
     final qrItems = _favorites
         .where(
-          (item) =>
-              _normalizeType(item.type) == 'qr',
+          (item) => _normalizeType(item.type) == 'qr',
         )
         .toList();
 
@@ -801,8 +958,9 @@ class ScanlyActivityService {
   }
 
   static Future<void> clearFavorites() async {
-    final items =
-        List<ScanlyItem>.from(_favorites);
+    final items = List<ScanlyItem>.from(
+      _favorites,
+    );
 
     for (final item in items) {
       await moveToTrash(item);
@@ -810,8 +968,9 @@ class ScanlyActivityService {
   }
 
   static Future<void> clearRecent() async {
-    final items =
-        List<ScanlyItem>.from(_recent);
+    final items = List<ScanlyItem>.from(
+      _recent,
+    );
 
     for (final item in items) {
       await moveToTrash(item);
@@ -864,6 +1023,22 @@ class ScanlyActivityService {
 
     await _saveLocal();
 
+    _notify();
+
+    unawaited(
+      _syncRestoredReferencesToCloud(
+        item,
+        favorite,
+        recent,
+      ),
+    );
+  }
+
+  static Future<void> _syncRestoredReferencesToCloud(
+    ScanlyItem item,
+    bool favorite,
+    bool recent,
+  ) async {
     try {
       await ActivityCloudStorage.deleteTrash(
         item.id,
@@ -889,8 +1064,6 @@ class ScanlyActivityService {
         );
       }
     } catch (_) {}
-
-    _notify();
   }
 
   static String _normalizeType(

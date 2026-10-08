@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scanly/Auth/Auth_Cubit.dart';
+import 'package:scanly/Core/UserProfileCache.dart';
 import 'package:scanly/Widgets/Auth/LoginForm.dart';
 import 'package:scanly/Widgets/Auth/LoginHeader.dart';
 import 'package:scanly/Widgets/Auth/LoginThemeButton.dart';
@@ -29,7 +30,6 @@ class _LoginPageState extends State<LoginPage> {
   bool isGoogleLoading = false;
   bool isFacebookLoading = false;
   bool isSocialLogin = false;
-  bool isForgotPasswordLoading = false;
 
   @override
   void dispose() {
@@ -68,7 +68,9 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      await context.read<AuthCubit>().signInWithGoogle();
+      await context
+          .read<AuthCubit>()
+          .signInWithGoogle();
     } catch (e) {
       debugPrint(
         'LOGIN PAGE GOOGLE ERROR: $e',
@@ -104,7 +106,9 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      await context.read<AuthCubit>().signInWithFacebook();
+      await context
+          .read<AuthCubit>()
+          .signInWithFacebook();
     } catch (e) {
       debugPrint(
         'LOGIN PAGE FACEBOOK ERROR: $e',
@@ -129,93 +133,24 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> forgotPassword() async {
-    if (isForgotPasswordLoading) {
+  void forgotPassword() {
+    if (isSocialLoading) {
       return;
     }
 
-    final email = emailController.text.trim();
+    final email =
+        emailController.text.trim();
 
-    if (email.isEmpty) {
-      _showSnackBar(
-        'Please enter your email first.',
-      );
-      return;
-    }
-
-    if (!_isValidEmail(email)) {
-      _showSnackBar(
-        'Please enter a valid email address.',
-      );
-      return;
-    }
-
-    setState(() {
-      isForgotPasswordLoading = true;
-    });
-
-    try {
-      final authCubit = context.read<AuthCubit>();
-
-      await authCubit.sendPasswordResetEmail(email);
-
-      if (!mounted) {
-        return;
-      }
-
-      final authState = authCubit.state;
-
-      if (authState.status == AuthStatus.success) {
-        context.push(
-          '/forgot-password-verification',
-          extra: email,
-        );
-
-        return;
-      }
-
-      if (authState.status == AuthStatus.failure) {
-        _showSnackBar(
-          authState.errorMessage ??
-              'Unable to send password reset email.',
-          isError: true,
-        );
-      }
-    } catch (e) {
-      debugPrint(
-        'FORGOT PASSWORD ERROR: $e',
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      _showSnackBar(
-        'Unable to send password reset email.',
-        isError: true,
-      );
-    } finally {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        isForgotPasswordLoading = false;
-      });
-    }
-  }
-
-  bool _isValidEmail(String email) {
-    final emailRegex = RegExp(
-      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+    context.push(
+      '/forgot-password',
+      extra: email,
     );
-
-    return emailRegex.hasMatch(email);
   }
 
   void togglePasswordVisibility() {
     setState(() {
-      obscurePassword = !obscurePassword;
+      obscurePassword =
+          !obscurePassword;
     });
   }
 
@@ -245,13 +180,18 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    final email =
+        emailController.text.trim();
+
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+          shape:
+              RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(24),
           ),
           title: const Row(
             children: [
@@ -268,29 +208,38 @@ class _LoginPageState extends State<LoginPage> {
             ],
           ),
           content: const Text(
-            'The password you entered is incorrect. '
-            'You can reset your password and try again.',
+            'The password you entered is incorrect. Would you like to reset your password?',
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext).pop();
+                Navigator.of(
+                  dialogContext,
+                ).pop();
 
-                forgotPassword();
+                context.push(
+                  '/forgot-password',
+                  extra: email,
+                );
               },
               child: const Text(
                 'Forgot Password?',
                 style: TextStyle(
-                  color: Color(0xFF5B5FEF),
-                  fontWeight: FontWeight.bold,
+                  color:
+                      Color(0xFF5B5FEF),
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext).pop();
+                Navigator.of(
+                  dialogContext,
+                ).pop();
               },
-              child: const Text('Cancel'),
+              child:
+                  const Text('Cancel'),
             ),
           ],
         );
@@ -298,18 +247,49 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  Future<void> _handleSuccessfulLogin(
+    User user,
+  ) async {
+    if (user.emailVerified == false &&
+        user.providerData.any(
+          (provider) =>
+              provider.providerId ==
+              'password',
+        )) {
+      context.go('/verification');
+      return;
+    }
+
+    final onboardingCompleted =
+        await UserProfileCache
+            .isOnboardingCompleted();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (onboardingCompleted) {
+      context.go('/home');
+    } else {
+      context.go('/onboarding');
+    }
+  }
+
   void _handleAuthState(
     BuildContext context,
     AuthState state,
   ) {
-    if (state.status == AuthStatus.notRegistered) {
+    if (state.status ==
+        AuthStatus.notRegistered) {
       _showSnackBar(
         'This account is not registered. Please create an account first.',
         isError: true,
       );
 
       Future.delayed(
-        const Duration(milliseconds: 700),
+        const Duration(
+          milliseconds: 700,
+        ),
         () {
           if (!mounted) {
             return;
@@ -322,29 +302,25 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    if (state.status == AuthStatus.success &&
+    if (state.status ==
+            AuthStatus.success &&
         state.user != null) {
-      final User user = state.user!;
-
-      if (isSocialLogin) {
-        context.go('/home');
-        return;
-      }
-
-      if (user.emailVerified) {
-        context.go('/home');
-      } else {
-        context.go('/verification');
-      }
+      _handleSuccessfulLogin(
+        state.user!,
+      );
 
       return;
     }
 
-    if (state.status == AuthStatus.failure) {
-      final errorCode = state.errorCode;
+    if (state.status ==
+        AuthStatus.failure) {
+      final errorCode =
+          state.errorCode;
 
-      if (errorCode == 'wrong-password' ||
-          errorCode == 'invalid-credential') {
+      if (errorCode ==
+              'wrong-password' ||
+          errorCode ==
+              'invalid-credential') {
         _showWrongPasswordDialog();
         return;
       }
@@ -358,11 +334,15 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget build(
+    BuildContext context,
+  ) {
+    final theme =
+        Theme.of(context);
 
     final isDark =
-        theme.brightness == Brightness.dark;
+        theme.brightness ==
+            Brightness.dark;
 
     final textPrimary =
         theme.colorScheme.onSurface;
@@ -375,16 +355,23 @@ class _LoginPageState extends State<LoginPage> {
         ? const Color(0xFF1D1D29)
         : Colors.white;
 
-    return BlocListener<AuthCubit, AuthState>(
-      listener: _handleAuthState,
+    return BlocListener<
+        AuthCubit,
+        AuthState>(
+      listener:
+          _handleAuthState,
       child: Scaffold(
         body: Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+          decoration:
+              const BoxDecoration(
+            gradient:
+                LinearGradient(
+              begin:
+                  Alignment.topLeft,
+              end: Alignment
+                  .bottomRight,
               colors: [
                 Color(0xFF5B5FEF),
                 Color(0xFF7C5CFC),
@@ -396,47 +383,61 @@ class _LoginPageState extends State<LoginPage> {
             child: Stack(
               children: [
                 SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
+                  padding:
+                      const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 25,
                   ),
                   child: Column(
                     children: [
-                      const SizedBox(height: 55),
+                      const SizedBox(
+                        height: 55,
+                      ),
                       const LoginHeader(),
-                      const SizedBox(height: 30),
+                      const SizedBox(
+                        height: 30,
+                      ),
                       LoginForm(
                         formKey: formKey,
-                        emailController: emailController,
+                        emailController:
+                            emailController,
                         passwordController:
                             passwordController,
                         obscurePassword:
                             obscurePassword,
                         isSocialLoading:
                             isSocialLoading,
-                        textPrimary: textPrimary,
+                        textPrimary:
+                            textPrimary,
                         textSecondary:
                             textSecondary,
-                        cardColor: cardColor,
+                        cardColor:
+                            cardColor,
                         onTogglePassword:
                             togglePasswordVisibility,
                         onForgotPassword:
                             forgotPassword,
-                        onLogin: login,
+                        onLogin:
+                            login,
                         onRegister: () {
-                          context.push('/register');
+                          context.push(
+                            '/register',
+                          );
                         },
                         onGoogle:
                             loginWithGoogle,
                         onFacebook:
                             loginWithFacebook,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(
+                        height: 20,
+                      ),
                     ],
                   ),
                 ),
                 LoginThemeButton(
-                  onToggleTheme: toggleTheme,
+                  onToggleTheme:
+                      toggleTheme,
                 ),
               ],
             ),

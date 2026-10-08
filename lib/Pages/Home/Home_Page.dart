@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:scanly/Core/NotificationService.dart';
 import 'package:scanly/Core/ScanlyActivityService.dart';
+import 'package:scanly/Core/UserProfileCache.dart';
 import 'package:scanly/Widgets/Home/HomeActivityAction.dart';
 import 'package:scanly/Widgets/Home/HomeNotificationButton.dart';
 import 'package:scanly/Widgets/Home/HomeToolCard.dart';
@@ -87,7 +88,26 @@ class _HomePageState extends State<HomePage>
   }
 
   Future<void> loadUserName() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final cachedName =
+        await UserProfileCache.getName();
+
+    if (cachedName != null &&
+        cachedName.trim().isNotEmpty) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        userName = cachedName.trim();
+      });
+    }
+
+    _refreshUserNameInBackground();
+  }
+
+  Future<void> _refreshUserNameInBackground() async {
+    final user =
+        FirebaseAuth.instance.currentUser;
 
     if (user == null) {
       return;
@@ -100,30 +120,56 @@ class _HomePageState extends State<HomePage>
     final currentUser =
         FirebaseAuth.instance.currentUser;
 
-    final name = currentUser?.displayName;
+    if (currentUser == null) {
+      return;
+    }
 
-    if (name != null && name.trim().isNotEmpty) {
+    final firebaseName =
+        currentUser.displayName?.trim() ?? '';
+
+    if (firebaseName.isNotEmpty) {
+      await UserProfileCache.updateName(
+        firebaseName,
+      );
+
       if (!mounted) {
         return;
       }
 
-      setState(() {
-        userName = name.trim();
-      });
+      if (userName != firebaseName) {
+        setState(() {
+          userName = firebaseName;
+        });
+      }
 
       return;
     }
 
-    final email = currentUser?.email;
+    final email =
+        currentUser.email?.trim() ?? '';
 
-    if (email != null && email.isNotEmpty) {
+    if (email.isNotEmpty) {
+      final fallbackName =
+          email.split('@').first;
+
+      if (await UserProfileCache.getName() ==
+          null) {
+        await UserProfileCache.saveUser(
+          uid: currentUser.uid,
+          name: fallbackName,
+          email: email,
+        );
+      }
+
       if (!mounted) {
         return;
       }
 
-      setState(() {
-        userName = email.split('@').first;
-      });
+      if (userName == 'User') {
+        setState(() {
+          userName = fallbackName;
+        });
+      }
     }
   }
 
@@ -174,7 +220,8 @@ class _HomePageState extends State<HomePage>
     final colors = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor:
+          theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: RefreshIndicator(
           color: colors.primary,
@@ -207,7 +254,9 @@ class _HomePageState extends State<HomePage>
                 const SizedBox(height: 34),
                 HomeActivitySections(
                   key: ValueKey(
-                    ScanlyActivityService.version.value,
+                    ScanlyActivityService
+                        .version
+                        .value,
                   ),
                 ),
               ],
@@ -219,7 +268,8 @@ class _HomePageState extends State<HomePage>
   }
 
   Widget _buildHeader(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors =
+        Theme.of(context).colorScheme;
 
     return Row(
       children: [
@@ -232,7 +282,8 @@ class _HomePageState extends State<HomePage>
                 'Welcome back 👋',
                 style: TextStyle(
                   fontSize: 16,
-                  color: colors.onSurface.withOpacity(0.55),
+                  color: colors.onSurface
+                      .withOpacity(0.55),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -240,11 +291,13 @@ class _HomePageState extends State<HomePage>
               Text(
                 userName,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                overflow:
+                    TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 25,
                   color: colors.onSurface,
-                  fontWeight: FontWeight.bold,
+                  fontWeight:
+                      FontWeight.bold,
                 ),
               ),
             ],
@@ -252,8 +305,10 @@ class _HomePageState extends State<HomePage>
         ),
         const SizedBox(width: 10),
         HomeNotificationButton(
-          unreadCount: unreadNotifications,
-          onPressed: openNotifications,
+          unreadCount:
+              unreadNotifications,
+          onPressed:
+              openNotifications,
         ),
         const SizedBox(width: 8),
         _buildProfileButton(context),
@@ -261,21 +316,27 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  Widget _buildProfileButton(BuildContext context) {
+  Widget _buildProfileButton(
+    BuildContext context,
+  ) {
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient:
+            const LinearGradient(
           colors: [
             HomePage.primaryPurple,
             HomePage.secondaryBlue,
           ],
         ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius:
+            BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: HomePage.primaryPurple.withOpacity(0.25),
+            color: HomePage.primaryPurple
+                .withOpacity(0.25),
             blurRadius: 10,
-            offset: const Offset(0, 5),
+            offset:
+                const Offset(0, 5),
           ),
         ],
       ),
@@ -294,33 +355,42 @@ class _HomePageState extends State<HomePage>
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      physics:
+          const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 14,
       mainAxisSpacing: 14,
       childAspectRatio: 1.15,
       children: [
         HomeToolCard(
-          icon: Icons.qr_code_scanner,
+          icon:
+              Icons.qr_code_scanner,
           title: 'QR Scanner',
-          subtitle: 'Scan QR codes',
+          subtitle:
+              'Scan QR codes',
           onTap: openQrTools,
         ),
         HomeToolCard(
-          icon: Icons.note_alt_outlined,
+          icon:
+              Icons.note_alt_outlined,
           title: 'Notes',
-          subtitle: 'Create notes',
+          subtitle:
+              'Create notes',
           onTap: openNotes,
         ),
         HomeToolCard(
-          icon: Icons.picture_as_pdf_outlined,
+          icon:
+              Icons.picture_as_pdf_outlined,
           title: 'PDF & Images',
-          subtitle: 'Manage files',
+          subtitle:
+              'Manage files',
           onTap: openPdfImages,
         ),
         HomeToolCard(
-          icon: Icons.record_voice_over_outlined,
+          icon:
+              Icons.record_voice_over_outlined,
           title: 'Text / Voice',
-          subtitle: 'Convert document',
+          subtitle:
+              'Convert document',
           onTap: openImageToText,
         ),
       ],

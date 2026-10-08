@@ -1,4 +1,3 @@
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -8,13 +7,10 @@ import 'package:scanly/Core/GoRouterRefreshStream.dart';
 class AppRouter {
   static final GoRouter router = GoRouter(
     initialLocation: '/',
-
     refreshListenable: GoRouterRefreshStream(
       FirebaseAuth.instance.authStateChanges(),
     ),
-
     redirect: _redirect,
-
     routes: AppRoutes.routes,
   );
 
@@ -50,6 +46,9 @@ class AppRouter {
         location == '/verification';
 
     final bool isForgotPassword =
+        location == '/forgot-password';
+
+    final bool isForgotPasswordVerification =
         location == '/forgot-password-verification';
 
     final bool isResetPassword =
@@ -63,6 +62,7 @@ class AppRouter {
         isRegister ||
         isVerification ||
         isForgotPassword ||
+        isForgotPasswordVerification ||
         isResetPassword;
 
     if (user == null) {
@@ -82,6 +82,11 @@ class AppRouter {
         return null;
       }
 
+      if (isForgotPassword ||
+          isForgotPasswordVerification) {
+        return null;
+      }
+
       if (!isVerification) {
         return '/verification';
       }
@@ -98,6 +103,7 @@ class AppRouter {
     }
 
     if (isForgotPassword ||
+        isForgotPasswordVerification ||
         isResetPassword) {
       return null;
     }

@@ -63,6 +63,14 @@ class _LoginFormState extends State<LoginForm> {
     return widget.passwordController.text.isNotEmpty;
   }
 
+  bool get _showEmailError {
+    return _emailTouched && !_emailIsValid;
+  }
+
+  bool get _showPasswordError {
+    return _passwordTouched && !_passwordIsValid;
+  }
+
   InputBorder _border({
     required bool error,
     required Color color,
@@ -77,8 +85,52 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   @override
+  void initState() {
+    super.initState();
+
+    widget.emailController.addListener(_onTextChanged);
+    widget.passwordController.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.emailController.removeListener(_onTextChanged);
+    widget.passwordController.removeListener(_onTextChanged);
+
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {});
+  }
+
+  void _validateFields() {
+    setState(() {
+      _emailTouched = true;
+      _passwordTouched = true;
+    });
+
+    widget.formKey.currentState?.validate();
+  }
+
+  void _handleLogin() {
+    _validateFields();
+
+    if (!_emailIsValid || !_passwordIsValid) {
+      return;
+    }
+
+    widget.onLogin();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final errorColor = Colors.redAccent;
+
     final normalBorder =
         widget.textSecondary.withOpacity(0.25);
 
@@ -104,10 +156,12 @@ class _LoginFormState extends State<LoginForm> {
               controller: widget.emailController,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
-              onChanged: (_) {
-                setState(() {
-                  _emailTouched = true;
-                });
+              onTap: () {
+                if (!_emailTouched) {
+                  setState(() {
+                    _emailTouched = true;
+                  });
+                }
               },
               decoration: InputDecoration(
                 hintText: 'Email',
@@ -115,16 +169,14 @@ class _LoginFormState extends State<LoginForm> {
                   Icons.email_outlined,
                 ),
                 enabledBorder: _border(
-                  error:
-                      _emailTouched && !_emailIsValid,
+                  error: _showEmailError,
                   color: normalBorder,
                 ),
                 focusedBorder: _border(
-                  error:
-                      _emailTouched && !_emailIsValid,
-                  color: _emailIsValid
-                      ? const Color(0xFF5B5FEF)
-                      : errorColor,
+                  error: _showEmailError,
+                  color: _showEmailError
+                      ? errorColor
+                      : const Color(0xFF5B5FEF),
                 ),
                 errorBorder: _border(
                   error: true,
@@ -144,9 +196,7 @@ class _LoginFormState extends State<LoginForm> {
                   return 'Enter your email';
                 }
 
-                if (!_isValidEmail(
-                  value.trim(),
-                )) {
+                if (!_isValidEmail(value.trim())) {
                   return 'Enter a valid email';
                 }
 
@@ -160,10 +210,12 @@ class _LoginFormState extends State<LoginForm> {
               controller: widget.passwordController,
               obscureText: widget.obscurePassword,
               textInputAction: TextInputAction.done,
-              onChanged: (_) {
-                setState(() {
-                  _passwordTouched = true;
-                });
+              onTap: () {
+                if (!_passwordTouched) {
+                  setState(() {
+                    _passwordTouched = true;
+                  });
+                }
               },
               decoration: InputDecoration(
                 hintText: 'Password',
@@ -179,18 +231,14 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                 ),
                 enabledBorder: _border(
-                  error:
-                      _passwordTouched &&
-                      !_passwordIsValid,
+                  error: _showPasswordError,
                   color: normalBorder,
                 ),
                 focusedBorder: _border(
-                  error:
-                      _passwordTouched &&
-                      !_passwordIsValid,
-                  color: _passwordIsValid
-                      ? const Color(0xFF5B5FEF)
-                      : errorColor,
+                  error: _showPasswordError,
+                  color: _showPasswordError
+                      ? errorColor
+                      : const Color(0xFF5B5FEF),
                 ),
                 errorBorder: _border(
                   error: true,
@@ -247,7 +295,7 @@ class _LoginFormState extends State<LoginForm> {
                         isLoading ||
                                 widget.isSocialLoading
                             ? null
-                            : widget.onLogin,
+                            : _handleLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
                           const Color(0xFF5B5FEF),

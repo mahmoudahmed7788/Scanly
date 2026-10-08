@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:scanly/Auth/Auth_Cubit.dart';
 
-class RegisterForm extends StatelessWidget {
+class RegisterForm extends StatefulWidget {
   final TextEditingController firstNameController;
   final TextEditingController lastNameController;
   final TextEditingController emailController;
@@ -33,9 +33,16 @@ class RegisterForm extends StatelessWidget {
     required this.onRegister,
   });
 
-  // ============================================================
-  // PASSWORD CONDITIONS
-  // ============================================================
+  @override
+  State<RegisterForm> createState() => _RegisterFormState();
+}
+
+class _RegisterFormState extends State<RegisterForm> {
+  bool _firstNameTouched = false;
+  bool _lastNameTouched = false;
+  bool _emailTouched = false;
+  bool _passwordTouched = false;
+  bool _confirmPasswordTouched = false;
 
   bool _hasMinimumLength(String password) {
     return password.length >= 8;
@@ -72,9 +79,194 @@ class RegisterForm extends StatelessWidget {
         _hasNoSpaces(password);
   }
 
-  // ============================================================
-  // PASSWORD REQUIREMENT ITEM
-  // ============================================================
+  bool _isValidEmail(String email) {
+    return RegExp(
+      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+    ).hasMatch(email);
+  }
+
+  bool get _firstNameValid {
+    return widget.firstNameController.text.trim().isNotEmpty;
+  }
+
+  bool get _lastNameValid {
+    return widget.lastNameController.text.trim().isNotEmpty;
+  }
+
+  bool get _emailValid {
+    return _isValidEmail(
+      widget.emailController.text.trim(),
+    );
+  }
+
+  bool get _passwordValid {
+    return _isStrongPassword(
+      widget.passwordController.text,
+    );
+  }
+
+  bool get _confirmPasswordValid {
+    final password =
+        widget.passwordController.text;
+
+    final confirm =
+        widget.confirmPasswordController.text;
+
+    return confirm.isNotEmpty &&
+        confirm == password;
+  }
+
+  bool get _showFirstNameError {
+    return _firstNameTouched && !_firstNameValid;
+  }
+
+  bool get _showLastNameError {
+    return _lastNameTouched && !_lastNameValid;
+  }
+
+  bool get _showEmailError {
+    return _emailTouched && !_emailValid;
+  }
+
+  bool get _showPasswordError {
+    return _passwordTouched && !_passwordValid;
+  }
+
+  bool get _showConfirmPasswordError {
+    return _confirmPasswordTouched &&
+        !_confirmPasswordValid;
+  }
+
+  InputBorder _border({
+    required bool error,
+    required Color normalColor,
+  }) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(
+        color: error
+            ? Colors.redAccent
+            : normalColor,
+        width: error ? 1.6 : 1,
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    widget.firstNameController.addListener(
+      _onTextChanged,
+    );
+
+    widget.lastNameController.addListener(
+      _onTextChanged,
+    );
+
+    widget.emailController.addListener(
+      _onTextChanged,
+    );
+
+    widget.passwordController.addListener(
+      _onTextChanged,
+    );
+
+    widget.confirmPasswordController.addListener(
+      _onTextChanged,
+    );
+  }
+
+  @override
+  void dispose() {
+    widget.firstNameController.removeListener(
+      _onTextChanged,
+    );
+
+    widget.lastNameController.removeListener(
+      _onTextChanged,
+    );
+
+    widget.emailController.removeListener(
+      _onTextChanged,
+    );
+
+    widget.passwordController.removeListener(
+      _onTextChanged,
+    );
+
+    widget.confirmPasswordController.removeListener(
+      _onTextChanged,
+    );
+
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _markFirstNameTouched() {
+    if (!_firstNameTouched) {
+      setState(() {
+        _firstNameTouched = true;
+      });
+    }
+  }
+
+  void _markLastNameTouched() {
+    if (!_lastNameTouched) {
+      setState(() {
+        _lastNameTouched = true;
+      });
+    }
+  }
+
+  void _markEmailTouched() {
+    if (!_emailTouched) {
+      setState(() {
+        _emailTouched = true;
+      });
+    }
+  }
+
+  void _markPasswordTouched() {
+    if (!_passwordTouched) {
+      setState(() {
+        _passwordTouched = true;
+      });
+    }
+  }
+
+  void _markConfirmPasswordTouched() {
+    if (!_confirmPasswordTouched) {
+      setState(() {
+        _confirmPasswordTouched = true;
+      });
+    }
+  }
+
+  void _validateAndRegister() {
+    setState(() {
+      _firstNameTouched = true;
+      _lastNameTouched = true;
+      _emailTouched = true;
+      _passwordTouched = true;
+      _confirmPasswordTouched = true;
+    });
+
+    if (!_firstNameValid ||
+        !_lastNameValid ||
+        !_emailValid ||
+        !_passwordValid ||
+        !_confirmPasswordValid) {
+      return;
+    }
+
+    widget.onRegister();
+  }
 
   Widget _passwordRequirement({
     required String text,
@@ -92,20 +284,13 @@ class RegisterForm extends StatelessWidget {
         bottom: 7,
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.center,
         children: [
-          AnimatedSwitcher(
-            duration:
-                const Duration(milliseconds: 180),
-            child: Icon(
-              valid
-                  ? Icons.check_circle_rounded
-                  : Icons.radio_button_unchecked_rounded,
-              key: ValueKey(valid),
-              size: 17,
-              color: color,
-            ),
+          Icon(
+            valid
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
+            size: 17,
+            color: color,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -125,10 +310,6 @@ class RegisterForm extends StatelessWidget {
     );
   }
 
-  // ============================================================
-  // PASSWORD REQUIREMENTS
-  // ============================================================
-
   Widget _buildPasswordRequirements(
     BuildContext context,
   ) {
@@ -137,147 +318,126 @@ class RegisterForm extends StatelessWidget {
     final isDark =
         theme.brightness == Brightness.dark;
 
-    return AnimatedBuilder(
-      animation: passwordController,
-      builder: (context, child) {
-        final password =
-            passwordController.text;
+    final password =
+        widget.passwordController.text;
 
-        final hasStarted =
-            password.isNotEmpty;
+    final hasStarted =
+        password.isNotEmpty;
 
-        return AnimatedSize(
-          duration:
-              const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          child: hasStarted
-              ? Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(
-                    top: 10,
-                  ),
-                  padding:
-                      const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF252533)
-                        : const Color(0xFFF7F7FC),
-                    borderRadius:
-                        BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isDark
-                          ? const Color(0xFF3A394B)
-                          : const Color(0xFFE5E4F0),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Password requirements',
-                        style: TextStyle(
-                          color: theme
-                              .colorScheme
-                              .onSurface,
-                          fontSize: 13,
-                          fontWeight:
-                              FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(
-                        height: 10,
-                      ),
+    if (!hasStarted) {
+      return const SizedBox.shrink();
+    }
 
-                      _passwordRequirement(
-                        text:
-                            'At least 8 characters',
-                        valid:
-                            _hasMinimumLength(
-                          password,
-                        ),
-                        isDark: isDark,
-                      ),
-
-                      _passwordRequirement(
-                        text:
-                            'One uppercase letter (A-Z)',
-                        valid:
-                            _hasUppercase(
-                          password,
-                        ),
-                        isDark: isDark,
-                      ),
-
-                      _passwordRequirement(
-                        text:
-                            'One lowercase letter (a-z)',
-                        valid:
-                            _hasLowercase(
-                          password,
-                        ),
-                        isDark: isDark,
-                      ),
-
-                      _passwordRequirement(
-                        text:
-                            'One number (0-9)',
-                        valid:
-                            _hasNumber(
-                          password,
-                        ),
-                        isDark: isDark,
-                      ),
-
-                      _passwordRequirement(
-                        text:
-                            'One special character (!@#\$...)',
-                        valid:
-                            _hasSpecialCharacter(
-                          password,
-                        ),
-                        isDark: isDark,
-                      ),
-
-                      _passwordRequirement(
-                        text:
-                            'No spaces',
-                        valid:
-                            _hasNoSpaces(
-                          password,
-                        ),
-                        isDark: isDark,
-                      ),
-                    ],
-                  ),
-                )
-              : const SizedBox.shrink(),
-        );
-      },
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(
+        top: 10,
+      ),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF252533)
+            : const Color(0xFFF7F7FC),
+        borderRadius:
+            BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF3A394B)
+              : const Color(0xFFE5E4F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Password requirements',
+            style: TextStyle(
+              color:
+                  theme.colorScheme.onSurface,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _passwordRequirement(
+            text: 'At least 8 characters',
+            valid: _hasMinimumLength(password),
+            isDark: isDark,
+          ),
+          _passwordRequirement(
+            text: 'One uppercase letter (A-Z)',
+            valid: _hasUppercase(password),
+            isDark: isDark,
+          ),
+          _passwordRequirement(
+            text: 'One lowercase letter (a-z)',
+            valid: _hasLowercase(password),
+            isDark: isDark,
+          ),
+          _passwordRequirement(
+            text: 'One number (0-9)',
+            valid: _hasNumber(password),
+            isDark: isDark,
+          ),
+          _passwordRequirement(
+            text:
+                'One special character (!@#\$...)',
+            valid:
+                _hasSpecialCharacter(password),
+            isDark: isDark,
+          ),
+          _passwordRequirement(
+            text: 'No spaces',
+            valid: _hasNoSpaces(password),
+            isDark: isDark,
+          ),
+        ],
+      ),
     );
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final normalBorder =
+        theme.colorScheme.onSurface
+            .withOpacity(0.18);
+
     return Column(
       children: [
-        // ==========================================================
-        // FIRST NAME
-        // ==========================================================
-
         TextFormField(
-          controller: firstNameController,
+          controller:
+              widget.firstNameController,
           textInputAction:
               TextInputAction.next,
-          decoration: const InputDecoration(
+          onTap: _markFirstNameTouched,
+          decoration: InputDecoration(
             hintText: 'First Name',
-            prefixIcon: Icon(
+            prefixIcon: const Icon(
               Icons.person_outline_rounded,
             ),
+            enabledBorder: _border(
+              error: _showFirstNameError,
+              normalColor: normalBorder,
+            ),
+            focusedBorder: _border(
+              error: _showFirstNameError,
+              normalColor:
+                  const Color(0xFF5B5FEF),
+            ),
+            errorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            focusedErrorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            errorText: _showFirstNameError
+                ? 'Enter your first name'
+                : null,
           ),
           validator: (value) {
             if (value == null ||
@@ -288,22 +448,38 @@ class RegisterForm extends StatelessWidget {
             return null;
           },
         ),
-
         const SizedBox(height: 15),
-
-        // ==========================================================
-        // LAST NAME
-        // ==========================================================
-
         TextFormField(
-          controller: lastNameController,
+          controller:
+              widget.lastNameController,
           textInputAction:
               TextInputAction.next,
-          decoration: const InputDecoration(
+          onTap: _markLastNameTouched,
+          decoration: InputDecoration(
             hintText: 'Last Name',
-            prefixIcon: Icon(
+            prefixIcon: const Icon(
               Icons.person_outline_rounded,
             ),
+            enabledBorder: _border(
+              error: _showLastNameError,
+              normalColor: normalBorder,
+            ),
+            focusedBorder: _border(
+              error: _showLastNameError,
+              normalColor:
+                  const Color(0xFF5B5FEF),
+            ),
+            errorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            focusedErrorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            errorText: _showLastNameError
+                ? 'Enter your last name'
+                : null,
           ),
           validator: (value) {
             if (value == null ||
@@ -314,24 +490,44 @@ class RegisterForm extends StatelessWidget {
             return null;
           },
         ),
-
         const SizedBox(height: 15),
-
-        // ==========================================================
-        // EMAIL
-        // ==========================================================
-
         TextFormField(
-          controller: emailController,
+          controller:
+              widget.emailController,
           keyboardType:
               TextInputType.emailAddress,
           textInputAction:
               TextInputAction.next,
-          decoration: const InputDecoration(
+          onTap: _markEmailTouched,
+          decoration: InputDecoration(
             hintText: 'Email',
-            prefixIcon: Icon(
+            prefixIcon: const Icon(
               Icons.email_outlined,
             ),
+            enabledBorder: _border(
+              error: _showEmailError,
+              normalColor: normalBorder,
+            ),
+            focusedBorder: _border(
+              error: _showEmailError,
+              normalColor:
+                  const Color(0xFF5B5FEF),
+            ),
+            errorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            focusedErrorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            errorText: _showEmailError
+                ? (widget.emailController.text
+                        .trim()
+                        .isEmpty
+                    ? 'Enter your email'
+                    : 'Enter a valid email')
+                : null,
           ),
           validator: (value) {
             if (value == null ||
@@ -339,11 +535,7 @@ class RegisterForm extends StatelessWidget {
               return 'Enter your email';
             }
 
-            final emailRegex = RegExp(
-              r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-            );
-
-            if (!emailRegex.hasMatch(
+            if (!_isValidEmail(
               value.trim(),
             )) {
               return 'Enter a valid email';
@@ -352,18 +544,15 @@ class RegisterForm extends StatelessWidget {
             return null;
           },
         ),
-
         const SizedBox(height: 15),
-
-        // ==========================================================
-        // PASSWORD
-        // ==========================================================
-
         TextFormField(
-          controller: passwordController,
-          obscureText: obscurePassword,
+          controller:
+              widget.passwordController,
+          obscureText:
+              widget.obscurePassword,
           textInputAction:
               TextInputAction.next,
+          onTap: _markPasswordTouched,
           decoration: InputDecoration(
             hintText: 'Password',
             prefixIcon: const Icon(
@@ -371,19 +560,38 @@ class RegisterForm extends StatelessWidget {
             ),
             suffixIcon: IconButton(
               onPressed:
-                  onTogglePassword,
+                  widget.onTogglePassword,
               icon: Icon(
-                obscurePassword
+                widget.obscurePassword
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
               ),
             ),
+            enabledBorder: _border(
+              error: _showPasswordError,
+              normalColor: normalBorder,
+            ),
+            focusedBorder: _border(
+              error: _showPasswordError,
+              normalColor:
+                  const Color(0xFF5B5FEF),
+            ),
+            errorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            focusedErrorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            errorText: _showPasswordError
+                ? (widget.passwordController
+                        .text
+                        .isEmpty
+                    ? 'Enter your password'
+                    : 'Password does not meet all requirements')
+                : null,
           ),
-          onChanged: (_) {
-            // The controller listener used by
-            // AnimatedBuilder will rebuild
-            // the requirements section.
-          },
           validator: (value) {
             if (value == null ||
                 value.isEmpty) {
@@ -397,28 +605,17 @@ class RegisterForm extends StatelessWidget {
             return null;
           },
         ),
-
-        // ==========================================================
-        // PASSWORD REQUIREMENTS
-        // ==========================================================
-
-        _buildPasswordRequirements(
-          context,
-        ),
-
+        _buildPasswordRequirements(context),
         const SizedBox(height: 15),
-
-        // ==========================================================
-        // CONFIRM PASSWORD
-        // ==========================================================
-
         TextFormField(
           controller:
-              confirmPasswordController,
+              widget.confirmPasswordController,
           obscureText:
-              obscureConfirmPassword,
+              widget.obscureConfirmPassword,
           textInputAction:
               TextInputAction.done,
+          onTap:
+              _markConfirmPasswordTouched,
           decoration: InputDecoration(
             hintText: 'Confirm Password',
             prefixIcon: const Icon(
@@ -426,13 +623,41 @@ class RegisterForm extends StatelessWidget {
             ),
             suffixIcon: IconButton(
               onPressed:
-                  onToggleConfirmPassword,
+                  widget.onToggleConfirmPassword,
               icon: Icon(
-                obscureConfirmPassword
+                widget.obscureConfirmPassword
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
               ),
             ),
+            enabledBorder: _border(
+              error:
+                  _showConfirmPasswordError,
+              normalColor: normalBorder,
+            ),
+            focusedBorder: _border(
+              error:
+                  _showConfirmPasswordError,
+              normalColor:
+                  const Color(0xFF5B5FEF),
+            ),
+            errorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            focusedErrorBorder: _border(
+              error: true,
+              normalColor: Colors.redAccent,
+            ),
+            errorText:
+                _showConfirmPasswordError
+                    ? (widget
+                            .confirmPasswordController
+                            .text
+                            .isEmpty
+                        ? 'Confirm your password'
+                        : 'Passwords do not match')
+                    : null,
           ),
           validator: (value) {
             if (value == null ||
@@ -441,20 +666,14 @@ class RegisterForm extends StatelessWidget {
             }
 
             if (value !=
-                passwordController.text) {
+                widget.passwordController.text) {
               return 'Passwords do not match';
             }
 
             return null;
           },
         ),
-
         const SizedBox(height: 25),
-
-        // ==========================================================
-        // CREATE ACCOUNT BUTTON
-        // ==========================================================
-
         BlocBuilder<AuthCubit, AuthState>(
           builder: (context, state) {
             final isLoading =
@@ -467,9 +686,9 @@ class RegisterForm extends StatelessWidget {
               child: ElevatedButton(
                 onPressed:
                     isLoading ||
-                            isSocialLoading
+                            widget.isSocialLoading
                         ? null
-                        : onRegister,
+                        : _validateAndRegister,
                 style:
                     ElevatedButton.styleFrom(
                   backgroundColor:
@@ -483,14 +702,12 @@ class RegisterForm extends StatelessWidget {
                   shape:
                       RoundedRectangleBorder(
                     borderRadius:
-                        BorderRadius.circular(
-                      18,
-                    ),
+                        BorderRadius.circular(18),
                   ),
                 ),
                 child:
                     isLoading &&
-                            !isSocialLoading
+                            !widget.isSocialLoading
                         ? const SizedBox(
                             width: 24,
                             height: 24,

@@ -1,12 +1,4 @@
-// ============================================================
-// EMAIL AUTHENTICATION
-// ============================================================
-
 part of 'Auth_Cubit.dart';
-
-// ============================================================
-// REGISTER
-// ============================================================
 
 extension AuthEmailMethods on AuthCubit {
   Future<void> register({
@@ -37,10 +29,23 @@ extension AuthEmailMethods on AuthCubit {
         );
       }
 
+      final cleanFirstName = firstName.trim();
+      final cleanLastName = lastName.trim();
+
       final fullName =
-          '${firstName.trim()} ${lastName.trim()}'.trim();
+          '$cleanFirstName $cleanLastName'.trim();
 
       await user.updateDisplayName(fullName);
+
+      await UserProfileCache.saveUser(
+        uid: user.uid,
+        name: fullName,
+        firstName: cleanFirstName,
+        lastName: cleanLastName,
+        email: user.email,
+      );
+
+      await UserProfileCache.setOnboardingCompleted(false);
 
       await user.sendEmailVerification();
 
@@ -48,9 +53,19 @@ extension AuthEmailMethods on AuthCubit {
         await _createOrUpdateUserDocument(
           user,
           name: fullName,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
+          firstName: cleanFirstName,
+          lastName: cleanLastName,
           provider: 'email',
+        );
+
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .set(
+          {
+            'onboardingCompleted': false,
+          },
+          SetOptions(merge: true),
         );
       } catch (e) {
         debugPrint(
@@ -81,10 +96,6 @@ extension AuthEmailMethods on AuthCubit {
     }
   }
 
-  // ============================================================
-  // LOGIN
-  // ============================================================
-
   Future<void> login({
     required String email,
     required String password,
@@ -109,6 +120,8 @@ extension AuthEmailMethods on AuthCubit {
           'Could not sign in.',
         );
       }
+
+      await _cacheLoggedInUser(user);
 
       try {
         await _createOrUpdateUserDocument(
@@ -148,8 +161,8 @@ extension AuthEmailMethods on AuthCubit {
       emit(
         AuthState(
           status: AuthStatus.failure,
-          errorMessage: e.message ??
-              'Authentication failed.',
+          errorMessage:
+              e.message ?? 'Authentication failed.',
           errorCode: e.code,
         ),
       );
@@ -160,9 +173,111 @@ extension AuthEmailMethods on AuthCubit {
     }
   }
 
-  // ============================================================
-  // RESEND VERIFICATION
-  // ============================================================
+  Future<void> _cacheLoggedInUser(
+    User user,
+  ) async {
+    try {
+      String? name;
+      String? firstName;
+      String? lastName;
+      bool onboardingCompleted = false;
+
+      final authName =
+          user.displayName?.trim() ?? '';
+
+      if (authName.isNotEmpty) {
+        name = authName;
+
+        final parts = authName
+            .split(' ')
+            .where(
+              (part) => part.trim().isNotEmpty,
+            )
+            .toList();
+
+        if (parts.isNotEmpty) {
+          firstName = parts.first;
+        }
+
+        if (parts.length > 1) {
+          lastName =
+              parts.sublist(1).join(' ').trim();
+        }
+      }
+
+      try {
+        final document =
+            await _firestore
+                .collection('users')
+                .doc(user.uid)
+                .get();
+
+        final data = document.data();
+
+        if (data != null) {
+          final firestoreName =
+              data['name']?.toString().trim() ?? '';
+
+          final firestoreFirstName =
+              data['firstName']?.toString().trim() ?? '';
+
+          final firestoreLastName =
+              data['lastName']?.toString().trim() ?? '';
+
+          if (firestoreName.isNotEmpty) {
+            name = firestoreName;
+          }
+
+          if (firestoreFirstName.isNotEmpty) {
+            firstName = firestoreFirstName;
+          }
+
+          if (firestoreLastName.isNotEmpty) {
+            lastName = firestoreLastName;
+          }
+
+          if ((name == null || name!.isEmpty) &&
+              firstName != null &&
+              firstName!.isNotEmpty) {
+            name = [
+              firstName,
+              if (lastName != null &&
+                  lastName!.isNotEmpty)
+                lastName,
+            ].join(' ');
+          }
+
+          final onboardingValue =
+              data['onboardingCompleted'];
+
+          if (onboardingValue is bool) {
+            onboardingCompleted =
+                onboardingValue;
+          }
+        }
+      } catch (e) {
+        debugPrint(
+          'LOGIN PROFILE FETCH ERROR: $e',
+        );
+      }
+
+      await UserProfileCache.saveUser(
+        uid: user.uid,
+        name: name,
+        firstName: firstName,
+        lastName: lastName,
+        email: user.email,
+      );
+
+      await UserProfileCache.setOnboardingCompleted(
+        onboardingCompleted,
+      );
+    } catch (e) {
+      debugPrint(
+        'LOGIN USER PROFILE CACHE ERROR: $e',
+      );
+    }
+  }
 
   Future<void> resendVerificationEmail() async {
     final user = _auth.currentUser;
@@ -192,10 +307,6 @@ extension AuthEmailMethods on AuthCubit {
       );
     }
   }
-
-  // ============================================================
-  // CHECK EMAIL VERIFIED
-  // ============================================================
 
   Future<bool> checkEmailVerified() async {
     final user = _auth.currentUser;
@@ -231,10 +342,6 @@ extension AuthEmailMethods on AuthCubit {
     }
   }
 
-  // ============================================================
-  // SEND PASSWORD RESET EMAIL
-  // ============================================================
-
   Future<void> sendPasswordResetEmail(
     String email,
   ) async {
@@ -263,10 +370,6 @@ extension AuthEmailMethods on AuthCubit {
       );
     }
   }
-
-  // ============================================================
-  // VERIFY PASSWORD RESET CODE
-  // ============================================================
 
   Future<String?> verifyPasswordResetCode(
     String code,
@@ -297,10 +400,6 @@ extension AuthEmailMethods on AuthCubit {
       return null;
     }
   }
-
-  // ============================================================
-  // CONFIRM PASSWORD RESET
-  // ============================================================
 
   Future<bool> confirmPasswordReset({
     required String code,

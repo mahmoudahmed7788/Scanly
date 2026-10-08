@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:scanly/Core/UserProfileCache.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -12,7 +12,8 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  final PageController _pageController = PageController();
+  final PageController _pageController =
+      PageController();
 
   int _currentPage = 0;
   bool _isCompleting = false;
@@ -54,10 +55,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-
-      await prefs.setBool(
-        'onboardingCompleted',
+      await UserProfileCache.setOnboardingCompleted(
         true,
       );
 
@@ -131,7 +129,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final colors =
+        Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -199,7 +198,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   final page = _pages[index];
 
                   return Padding(
-                    padding: const EdgeInsets.symmetric(
+                    padding:
+                        const EdgeInsets.symmetric(
                       horizontal: 28,
                     ),
                     child: Column(
@@ -269,7 +269,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 return AnimatedContainer(
                   duration:
                       const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(
+                  margin:
+                      const EdgeInsets.symmetric(
                     horizontal: 4,
                   ),
                   width: active ? 28 : 8,
@@ -295,7 +296,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
             const SizedBox(height: 22),
             Padding(
-              padding: const EdgeInsets.symmetric(
+              padding:
+                  const EdgeInsets.symmetric(
                 horizontal: 24,
               ),
               child: Container(
@@ -320,8 +322,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           Colors.transparent,
                       disabledBackgroundColor:
                           Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
+                      shadowColor:
+                          Colors.transparent,
+                      shape:
+                          RoundedRectangleBorder(
                         borderRadius:
                             BorderRadius.circular(18),
                       ),
@@ -341,7 +345,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                     _pages.length - 1
                                 ? 'Get Started'
                                 : 'Next',
-                            style: const TextStyle(
+                            style:
+                                const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight:

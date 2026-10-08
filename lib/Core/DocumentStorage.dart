@@ -12,34 +12,19 @@ import 'package:scanly/Service/Trash/TrashService.dart';
 class DocumentStorage {
   DocumentStorage._();
 
-  // =========================================================
-  // INITIALIZE
-  // =========================================================
-
   static Future<void> init() async {
     await DocumentHiveService.init();
 
     final user = FirebaseAuth.instance.currentUser;
 
     if (user != null) {
-      // -------------------------------------------------------
-      // IMPORTANT:
-      //
-      // Cloud sync must NOT block app startup.
-      //
-      // Local Hive documents are already available.
-      // Cloud sync happens in the background.
-      // -------------------------------------------------------
-
       unawaited(
-        syncFromCloud(),
+        syncFromCloud(
+          expectedUid: user.uid,
+        ),
       );
     }
   }
-
-  // =========================================================
-  // SWITCH USER
-  // =========================================================
 
   static Future<void> switchUser(
     String uid,
@@ -48,20 +33,16 @@ class DocumentStorage {
       uid,
     );
 
-    await syncFromCloud();
+    unawaited(
+      syncFromCloud(
+        expectedUid: uid,
+      ),
+    );
   }
-
-  // =========================================================
-  // CURRENT USER BOX
-  // =========================================================
 
   static Box? get _box {
     return DocumentHiveService.box;
   }
-
-  // =========================================================
-  // DOCUMENT DIRECTORY
-  // =========================================================
 
   static Future<Directory> getDocumentsDirectory() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -70,10 +51,6 @@ class DocumentStorage {
       user?.uid,
     );
   }
-
-  // =========================================================
-  // GET DOCUMENTS
-  // =========================================================
 
   static List<DocumentModel> getDocuments() {
     final box = _box;
@@ -100,21 +77,14 @@ class DocumentStorage {
     return documents;
   }
 
-  // =========================================================
-  // SORT
-  // =========================================================
-
   static int _sortDocuments(
     DocumentModel a,
     DocumentModel b,
   ) {
     final aDate = _parseDate(a.date);
-
     final bDate = _parseDate(b.date);
 
-    return bDate.compareTo(
-      aDate,
-    );
+    return bDate.compareTo(aDate);
   }
 
   static DateTime _parseDate(
@@ -127,10 +97,6 @@ class DocumentStorage {
           0,
         );
   }
-
-  // =========================================================
-  // GET ONE DOCUMENT
-  // =========================================================
 
   static DocumentModel? getDocument(
     String id,
@@ -154,10 +120,6 @@ class DocumentStorage {
     );
   }
 
-  // =========================================================
-  // SAVE DOCUMENT LOCALLY
-  // =========================================================
-
   static Future<bool> saveDocumentLocally(
     DocumentModel document,
   ) async {
@@ -165,8 +127,7 @@ class DocumentStorage {
 
     if (box == null) {
       print(
-        'Local document save skipped: '
-        'no active user.',
+        'Local document save skipped: no active user.',
       );
 
       return false;
@@ -188,10 +149,6 @@ class DocumentStorage {
     }
   }
 
-  // =========================================================
-  // SAVE DOCUMENT
-  // =========================================================
-
   static Future<void> saveDocument(
     DocumentModel document,
   ) async {
@@ -203,31 +160,40 @@ class DocumentStorage {
       return;
     }
 
-    // -------------------------------------------------------
-    // Background cloud sync.
-    // -------------------------------------------------------
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) {
+      return;
+    }
 
     unawaited(
       _syncDocumentToCloud(
         document,
+        expectedUid: uid,
       ),
     );
   }
 
-  // =========================================================
-  // SYNC NEW DOCUMENT TO CLOUD
-  // =========================================================
-
   static Future<void> _syncDocumentToCloud(
-    DocumentModel document,
-  ) async {
+    DocumentModel document, {
+    required String expectedUid,
+  }) async {
     try {
+      if (!_isCurrentUser(expectedUid)) {
+        return;
+      }
+
       await DocumentCloudService.saveToFirebase(
         document,
       );
 
+      if (!_isCurrentUser(expectedUid)) {
+        return;
+      }
+
       await _uploadDocumentIfNeeded(
         document,
+        expectedUid: expectedUid,
       );
     } catch (e) {
       print(
@@ -236,10 +202,6 @@ class DocumentStorage {
     }
   }
 
-  // =========================================================
-  // UPDATE DOCUMENT LOCALLY
-  // =========================================================
-
   static Future<bool> updateDocumentLocally(
     DocumentModel document,
   ) async {
@@ -247,8 +209,7 @@ class DocumentStorage {
 
     if (box == null) {
       print(
-        'Local document update skipped: '
-        'no active user.',
+        'Local document update skipped: no active user.',
       );
 
       return false;
@@ -270,14 +231,11 @@ class DocumentStorage {
     }
   }
 
-  // =========================================================
-  // UPDATE DOCUMENT
-  // =========================================================
-
   static Future<void> updateDocument(
     DocumentModel document,
   ) async {
-    final updatedLocally = await updateDocumentLocally(
+    final updatedLocally =
+        await updateDocumentLocally(
       document,
     );
 
@@ -285,34 +243,42 @@ class DocumentStorage {
       return;
     }
 
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) {
+      return;
+    }
+
     unawaited(
       _syncUpdatedDocumentToCloud(
         document,
+        expectedUid: uid,
       ),
     );
   }
 
-  // =========================================================
-  // SYNC UPDATED DOCUMENT TO CLOUD
-  // =========================================================
-
   static Future<void> _syncUpdatedDocumentToCloud(
-    DocumentModel document,
-  ) async {
+    DocumentModel document, {
+    required String expectedUid,
+  }) async {
     try {
+      if (!_isCurrentUser(expectedUid)) {
+        return;
+      }
+
       await DocumentCloudService.updateFirebase(
         document,
       );
 
-      // -----------------------------------------------------
-      // If the document does not have a Storage path yet,
-      // upload its PDF.
-      // -----------------------------------------------------
+      if (!_isCurrentUser(expectedUid)) {
+        return;
+      }
 
       if (document.storagePath == null ||
           document.storagePath!.isEmpty) {
         await _uploadDocumentIfNeeded(
           document,
+          expectedUid: expectedUid,
         );
       }
     } catch (e) {
@@ -322,14 +288,15 @@ class DocumentStorage {
     }
   }
 
-  // =========================================================
-  // UPLOAD PDF
-  // =========================================================
-
   static Future<void> _uploadDocumentIfNeeded(
-    DocumentModel document,
-  ) async {
+    DocumentModel document, {
+    required String expectedUid,
+  }) async {
     try {
+      if (!_isCurrentUser(expectedUid)) {
+        return;
+      }
+
       final storagePath =
           await DocumentCloudService.uploadPdfIfNeeded(
         document,
@@ -340,15 +307,11 @@ class DocumentStorage {
         return;
       }
 
-      // -----------------------------------------------------
-      // Update model with Firebase Storage path.
-      // -----------------------------------------------------
+      if (!_isCurrentUser(expectedUid)) {
+        return;
+      }
 
       document.storagePath = storagePath;
-
-      // -----------------------------------------------------
-      // Keep local Hive synchronized.
-      // -----------------------------------------------------
 
       final box = _box;
 
@@ -358,10 +321,6 @@ class DocumentStorage {
           document.toMap(),
         );
       }
-
-      // -----------------------------------------------------
-      // Update Firebase metadata.
-      // -----------------------------------------------------
 
       await DocumentCloudService.updateFirebase(
         document,
@@ -373,9 +332,12 @@ class DocumentStorage {
     }
   }
 
-  // =========================================================
-  // MARK AS OPENED
-  // =========================================================
+  static bool _isCurrentUser(
+    String expectedUid,
+  ) {
+    return FirebaseAuth.instance.currentUser?.uid ==
+        expectedUid;
+  }
 
   static Future<void> markAsOpened(
     DocumentModel document,
@@ -388,10 +350,6 @@ class DocumentStorage {
     );
   }
 
-  // =========================================================
-  // TOGGLE FAVORITE
-  // =========================================================
-
   static Future<void> toggleFavorite(
     DocumentModel document,
   ) async {
@@ -401,10 +359,6 @@ class DocumentStorage {
       document,
     );
   }
-
-  // =========================================================
-  // DELETE DOCUMENT → TRASH
-  // =========================================================
 
   static Future<void> deleteDocument(
     String id,
@@ -421,53 +375,38 @@ class DocumentStorage {
       return;
     }
 
-    // -------------------------------------------------------
-    // 1. Move complete document data to Trash.
-    //
-    // Save the current Favorite + Recent state so Restore
-    // can return the document to its original state.
-    // -------------------------------------------------------
-
     await TrashService.moveDocumentToTrash(
       document,
       wasFavorite: document.isFavorite,
       wasRecent: document.lastOpened != null,
     );
 
-    // -------------------------------------------------------
-    // 2. Remove from active local database.
-    // -------------------------------------------------------
+    await box.delete(id);
 
-    await box.delete(
-      id,
+    unawaited(
+      _deleteDocumentFromCloud(
+        id,
+      ),
     );
-
-    // -------------------------------------------------------
-    // 3. Remove active Firebase metadata.
-    // -------------------------------------------------------
-
-    await DocumentCloudService.deleteFromFirebase(
-      id,
-    );
-
-    // -------------------------------------------------------
-    // IMPORTANT:
-    //
-    // Do NOT delete the actual local PDF here.
-    //
-    // Do NOT delete the Firebase Storage PDF here.
-    //
-    // Permanent Delete is responsible for that.
-    // -------------------------------------------------------
 
     print(
       'Document moved to Trash: $id',
     );
   }
 
-  // =========================================================
-  // CLEAR CURRENT USER DOCUMENTS → TRASH
-  // =========================================================
+  static Future<void> _deleteDocumentFromCloud(
+    String id,
+  ) async {
+    try {
+      await DocumentCloudService.deleteFromFirebase(
+        id,
+      );
+    } catch (e) {
+      print(
+        'Background document delete error: $e',
+      );
+    }
+  }
 
   static Future<void> clearDocuments() async {
     final box = _box;
@@ -485,68 +424,46 @@ class DocumentStorage {
     }
 
     for (final document in documents) {
-      // -----------------------------------------------------
-      // Move document to Trash.
-      //
-      // Preserve Favorite + Recent state for Restore.
-      // -----------------------------------------------------
-
       await TrashService.moveDocumentToTrash(
         document,
         wasFavorite: document.isFavorite,
         wasRecent: document.lastOpened != null,
       );
 
-      // -----------------------------------------------------
-      // Remove active local metadata.
-      // -----------------------------------------------------
-
       await box.delete(
         document.id,
       );
 
-      // -----------------------------------------------------
-      // Remove active Firebase metadata.
-      // -----------------------------------------------------
-
-      await DocumentCloudService.deleteFromFirebase(
-        document.id,
+      unawaited(
+        _deleteDocumentFromCloud(
+          document.id,
+        ),
       );
     }
 
-    // -------------------------------------------------------
-    // IMPORTANT:
-    //
-    // Do NOT:
-    //
-    // await box.clear();
-    //
-    // Do NOT:
-    //
-    // await DocumentCloudService.clearFirebase();
-    //
-    // Trash must keep the deleted documents.
-    // -------------------------------------------------------
-
     print(
-      'All documents moved to Trash: '
-      '${documents.length}',
+      'All documents moved to Trash: ${documents.length}',
     );
   }
 
-  // =========================================================
-  // SYNC FROM CLOUD
-  // =========================================================
-
-  static Future<void> syncFromCloud() async {
+  static Future<void> syncFromCloud({
+    String? expectedUid,
+  }) async {
     final box = _box;
 
     if (box == null) {
       print(
-        'Cloud sync skipped: '
-        'no active user.',
+        'Cloud sync skipped: no active user.',
       );
 
+      return;
+    }
+
+    final uid =
+        expectedUid ??
+        FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) {
       return;
     }
 
@@ -554,20 +471,46 @@ class DocumentStorage {
       final cloudDocuments =
           await DocumentCloudService.getCloudDocuments();
 
-      // -----------------------------------------------------
-      // IMPORTANT:
-      //
-      // No box.clear().
-      // No deletion of local documents.
-      //
-      // We only update/add documents received from cloud.
-      // -----------------------------------------------------
+      if (!_isCurrentUser(uid)) {
+        return;
+      }
 
-      for (final document in cloudDocuments) {
-        await box.put(
-          document.id,
-          document.toMap(),
-        );
+      final localDocuments = getDocuments();
+
+      final localById = <String, DocumentModel>{
+        for (final document in localDocuments)
+          document.id: document,
+      };
+
+      for (final cloudDocument in cloudDocuments) {
+        if (!_isCurrentUser(uid)) {
+          return;
+        }
+
+        final localDocument =
+            localById[cloudDocument.id];
+
+        if (localDocument == null) {
+          await box.put(
+            cloudDocument.id,
+            cloudDocument.toMap(),
+          );
+
+          continue;
+        }
+
+        final localDate =
+            _parseDate(localDocument.date);
+
+        final cloudDate =
+            _parseDate(cloudDocument.date);
+
+        if (cloudDate.isAfter(localDate)) {
+          await box.put(
+            cloudDocument.id,
+            cloudDocument.toMap(),
+          );
+        }
       }
 
       print(
@@ -582,17 +525,12 @@ class DocumentStorage {
     }
   }
 
-  // =========================================================
-  // SYNC FROM DISK
-  // =========================================================
-
   static Future<void> syncFromDisk() async {
     final box = _box;
 
     if (box == null) {
       print(
-        'Disk sync skipped: '
-        'no active user.',
+        'Disk sync skipped: no active user.',
       );
 
       return;
@@ -612,7 +550,8 @@ class DocumentStorage {
         )
         .toList();
 
-    final existingDocuments = getDocuments();
+    final existingDocuments =
+        getDocuments();
 
     final existingByPath =
         <String, DocumentModel>{};
@@ -695,14 +634,8 @@ class DocumentStorage {
       );
     }
 
-    // -------------------------------------------------------
-    // Remove Hive records whose local files disappeared.
-    //
-    // This behavior is intentionally kept here because this
-    // method is an explicit "sync from disk" operation.
-    // -------------------------------------------------------
-
-    final storedDocuments = getDocuments();
+    final storedDocuments =
+        getDocuments();
 
     for (final document in storedDocuments) {
       final path = document.filePath;
@@ -720,9 +653,7 @@ class DocumentStorage {
       if (!DocumentFileService.isSupportedFile(
             extension,
           ) ||
-          !filesOnDisk.contains(
-            path,
-          )) {
+          !filesOnDisk.contains(path)) {
         await box.delete(
           document.id,
         );

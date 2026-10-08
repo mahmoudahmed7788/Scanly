@@ -40,73 +40,33 @@ import 'package:scanly/Widgets/Home/MainNavigationBar.dart';
 import 'package:scanly/Pages/Pdf/PDFImagesPage.dart';
 import 'package:scanly/Widgets/Settings/AboutScanlyPage.dart';
 
-// ============================================================
-// APP ROUTES
-// ============================================================
-
 class AppRoutes {
-  // ==========================================================
-  // ALL ROUTES
-  // ==========================================================
-
   static List<RouteBase> get routes {
     return [
-      // ======================================================
-      // AUTH ROUTES
-      // ======================================================
-
       _rootRoute(),
       _loginRoute(),
       _registerRoute(),
       _verificationRoute(),
       _forgotPasswordRoute(),
+      _forgotPasswordVerificationRoute(),
       _resetPasswordRoute(),
       _onboardingRoute(),
-
-      // ======================================================
-      // MAIN APP
-      // ======================================================
-
       _mainShell(),
-
-      // ======================================================
-      // HOME / SECONDARY
-      // ======================================================
-
       _profileRoute(),
       _recentRoute(),
       _notificationsRoute(),
       _aboutRoute(),
-
-      // ======================================================
-      // DOCUMENTS
-      // ======================================================
-
       _pdfPreviewRoute(),
       _editDocumentRoute(),
       _documentViewerRoute(),
-
-      // ======================================================
-      // NOTES
-      // ======================================================
-
       _notesRoute(),
       _createNoteRoute(),
       _viewNoteRoute(),
-
-      // ======================================================
-      // TOOLS
-      // ======================================================
-
       _qrToolsRoute(),
       _pdfImagesRoute(),
       _imageToTextRoute(),
     ];
   }
-
-  // ==========================================================
-  // ROOT
-  // ==========================================================
 
   static GoRoute _rootRoute() {
     return GoRoute(
@@ -117,10 +77,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // LOGIN
-  // ==========================================================
-
   static GoRoute _loginRoute() {
     return GoRoute(
       path: '/login',
@@ -129,10 +85,6 @@ class AppRoutes {
       },
     );
   }
-
-  // ==========================================================
-  // REGISTER
-  // ==========================================================
 
   static GoRoute _registerRoute() {
     return GoRoute(
@@ -143,10 +95,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // VERIFICATION
-  // ==========================================================
-
   static GoRoute _verificationRoute() {
     return GoRoute(
       path: '/verification',
@@ -156,11 +104,24 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // FORGOT PASSWORD
-  // ==========================================================
-
   static GoRoute _forgotPasswordRoute() {
+    return GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) {
+        final Object? extra = state.extra;
+
+        final String email =
+            extra is String ? extra : '';
+
+        return ForgotPasswordPage(
+          initialEmail:
+              email.isEmpty ? null : email, email: '',
+        );
+      },
+    );
+  }
+
+  static GoRoute _forgotPasswordVerificationRoute() {
     return GoRoute(
       path: '/forgot-password-verification',
       builder: (context, state) {
@@ -169,16 +130,12 @@ class AppRoutes {
         final String email =
             extra is String ? extra : '';
 
-        return ForgotPasswordVerificationPage(
+        return ForgotPasswordPage(
           email: email,
         );
       },
     );
   }
-
-  // ==========================================================
-  // RESET PASSWORD
-  // ==========================================================
 
   static GoRoute _resetPasswordRoute() {
     return GoRoute(
@@ -186,10 +143,6 @@ class AppRoutes {
       builder: (context, state) {
         final String? code =
             state.uri.queryParameters['oobCode'];
-
-        // ----------------------------------------------------
-        // INVALID / MISSING RESET CODE
-        // ----------------------------------------------------
 
         if (code == null || code.isEmpty) {
           return const Scaffold(
@@ -207,20 +160,12 @@ class AppRoutes {
           );
         }
 
-        // ----------------------------------------------------
-        // RESET PASSWORD PAGE
-        // ----------------------------------------------------
-
         return ResetPasswordPage(
           code: code,
         );
       },
     );
   }
-
-  // ==========================================================
-  // ONBOARDING
-  // ==========================================================
 
   static GoRoute _onboardingRoute() {
     return GoRoute(
@@ -231,70 +176,38 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // MAIN SHELL
-  // ==========================================================
-
   static ShellRoute _mainShell() {
     return ShellRoute(
-      builder: (
-        context,
-        state,
-        child,
-      ) {
+      builder: (context, state, child) {
         return MainNavigationPage(
           child: child,
         );
       },
       routes: [
-        // ====================================================
-        // HOME
-        // ====================================================
-
         GoRoute(
           path: '/home',
           builder: (context, state) {
             return const HomePage();
           },
         ),
-
-        // ====================================================
-        // DOCUMENTS
-        // ====================================================
-
         GoRoute(
           path: '/documents',
           builder: (context, state) {
             return const DocumentsPage();
           },
         ),
-
-        // ====================================================
-        // FAVORITES
-        // ====================================================
-
         GoRoute(
           path: '/favorites',
           builder: (context, state) {
             return const FavoritesPage();
           },
         ),
-
-        // ====================================================
-        // TRASH
-        // ====================================================
-
         GoRoute(
           path: '/trash',
           builder: (context, state) {
             return const TrashPage();
           },
         ),
-
-        // ====================================================
-        // SETTINGS
-        // ====================================================
-
         GoRoute(
           path: '/settings',
           builder: (context, state) {
@@ -305,10 +218,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // PROFILE
-  // ==========================================================
-
   static GoRoute _profileRoute() {
     return GoRoute(
       path: '/profile',
@@ -317,10 +226,6 @@ class AppRoutes {
       },
     );
   }
-
-  // ==========================================================
-  // RECENT
-  // ==========================================================
 
   static GoRoute _recentRoute() {
     return GoRoute(
@@ -331,10 +236,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // NOTIFICATIONS
-  // ==========================================================
-
   static GoRoute _notificationsRoute() {
     return GoRoute(
       path: '/notifications',
@@ -344,10 +245,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // ABOUT
-  // ==========================================================
-
   static GoRoute _aboutRoute() {
     return GoRoute(
       path: '/about',
@@ -356,10 +253,6 @@ class AppRoutes {
       },
     );
   }
-
-  // ==========================================================
-  // PDF PREVIEW
-  // ==========================================================
 
   static GoRoute _pdfPreviewRoute() {
     return GoRoute(
@@ -380,10 +273,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // EDIT DOCUMENT
-  // ==========================================================
-
   static GoRoute _editDocumentRoute() {
     return GoRoute(
       path: '/edit-document',
@@ -400,10 +289,6 @@ class AppRoutes {
       },
     );
   }
-
-  // ==========================================================
-  // DOCUMENT VIEWER
-  // ==========================================================
 
   static GoRoute _documentViewerRoute() {
     return GoRoute(
@@ -422,10 +307,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // NOTES
-  // ==========================================================
-
   static GoRoute _notesRoute() {
     return GoRoute(
       path: '/notes',
@@ -435,10 +316,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // CREATE NOTE
-  // ==========================================================
-
   static GoRoute _createNoteRoute() {
     return GoRoute(
       path: '/create-note',
@@ -447,10 +324,6 @@ class AppRoutes {
       },
     );
   }
-
-  // ==========================================================
-  // VIEW NOTE
-  // ==========================================================
 
   static GoRoute _viewNoteRoute() {
     return GoRoute(
@@ -469,10 +342,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // QR TOOLS
-  // ==========================================================
-
   static GoRoute _qrToolsRoute() {
     return GoRoute(
       path: '/qr-tools',
@@ -481,10 +350,6 @@ class AppRoutes {
       },
     );
   }
-
-  // ==========================================================
-  // PDF & IMAGES
-  // ==========================================================
 
   static GoRoute _pdfImagesRoute() {
     return GoRoute(
@@ -495,10 +360,6 @@ class AppRoutes {
     );
   }
 
-  // ==========================================================
-  // IMAGE TO TEXT
-  // ==========================================================
-
   static GoRoute _imageToTextRoute() {
     return GoRoute(
       path: '/image-to-text',
@@ -507,10 +368,6 @@ class AppRoutes {
       },
     );
   }
-
-  // ==========================================================
-  // ERROR WIDGETS
-  // ==========================================================
 
   static Widget _documentNotFound() {
     return const Scaffold(

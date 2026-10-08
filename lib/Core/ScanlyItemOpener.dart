@@ -14,12 +14,10 @@ import 'package:scanly/core/ScanlyActivityService.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ScanlyItemOpener {
-  static const String _legacyNotesKey =
-      'scanly_notes';
+  static const String _legacyNotesKey = 'scanly_notes';
 
   static String? get _notesKey {
-    final uid =
-        FirebaseAuth.instance.currentUser?.uid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
 
     if (uid == null || uid.isEmpty) {
       return null;
@@ -40,38 +38,23 @@ class ScanlyItemOpener {
       return;
     }
 
-    final oldNotes =
-        prefs.getStringList(_legacyNotesKey);
+    final oldNotes = prefs.getStringList(_legacyNotesKey);
 
-    if (oldNotes != null &&
-        oldNotes.isNotEmpty) {
-      await prefs.setStringList(
-        key,
-        oldNotes,
-      );
+    if (oldNotes != null && oldNotes.isNotEmpty) {
+      await prefs.setStringList(key, oldNotes);
     }
 
-    await prefs.remove(
-      _legacyNotesKey,
-    );
+    await prefs.remove(_legacyNotesKey);
   }
 
-  static Future<void> open(
-    BuildContext context,
-    ScanlyItem item,
-  ) async {
+  static Future<void> open(BuildContext context, ScanlyItem item) async {
     if (item.type == 'note') {
-      await _openNote(
-        context,
-        item,
-      );
+      await _openNote(context, item);
 
       return;
     }
 
-    await ScanlyActivityService.addRecent(
-      item,
-    );
+    await ScanlyActivityService.addRecent(item);
 
     if (!context.mounted) {
       return;
@@ -81,221 +64,265 @@ class ScanlyItemOpener {
       final value = item.data;
 
       if (value == null || value.isEmpty) {
-        _showMessage(
-          context,
-          'QR Code data is not available',
-        );
+        _showMessage(context, 'QR Code data is not available');
 
         return;
       }
 
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => QRPreviewPage(
-            value: value,
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => QRPreviewPage(value: value)),
       );
 
       return;
     }
 
     if (item.type == 'pdf') {
-      await _openPdf(
-        context,
-        item,
-      );
+      await _openPdf(context, item);
 
       return;
     }
 
     if (item.route.isNotEmpty) {
-      await context.push(
-        item.route,
-        extra: item.data,
-      );
+      await context.push(item.route, extra: item.data);
     }
   }
 
-  static Future<void> _openNote(
-    BuildContext context,
-    ScanlyItem item,
-  ) async {
-    final note =
-        await _findNote(item);
+  static Future<void> _openNote(BuildContext context, ScanlyItem item) async {
+    final note = await _findNote(item);
 
     if (!context.mounted) {
       return;
     }
 
     if (note == null) {
-      _showMessage(
-        context,
-        'Note not found',
-      );
+      _showMessage(context, 'Note not found');
 
       return;
     }
 
-    final updatedItem = ScanlyItem(
-      id: 'note_${note.id}',
-      title: note.title.isEmpty
-          ? 'Untitled Note'
-          : note.title,
-      subtitle: _previewText(note),
-      type: 'note',
-      route: '/view-note',
-      data: note.id,
-      createdAt:
-          note.updatedAt.millisecondsSinceEpoch,
-    );
+    final updatedItem = _noteToItem(note);
 
-    await ScanlyActivityService.addRecent(
-      updatedItem,
-    );
+    await ScanlyActivityService.addRecent(updatedItem);
 
     if (!context.mounted) {
       return;
     }
 
-    final result =
-        await context.push<NoteModel>(
-      '/view-note',
-      extra: note,
-    );
+    final result = await context.push<NoteModel>('/view-note', extra: note);
 
-    if (!context.mounted ||
-        result == null) {
+    if (!context.mounted || result == null) {
       return;
     }
 
-    await _saveUpdatedNote(
-      result,
+    await _saveUpdatedNote(result);
+  }
+
+  static ScanlyItem _noteToItem(NoteModel note) {
+    return ScanlyItem(
+      id: 'note_${note.id}',
+      title: note.title.isEmpty ? 'Untitled Note' : note.title,
+      subtitle: _previewText(note),
+      type: 'note',
+      route: '/view-note',
+      data: note.id,
+      createdAt: note.updatedAt.millisecondsSinceEpoch,
     );
   }
 
-  static Future<NoteModel?> _findNote(
-    ScanlyItem item,
-  ) async {
+  static Future<NoteModel?> _findNote(ScanlyItem item) async {
     final key = _notesKey;
 
     if (key == null) {
       return null;
     }
 
-    final prefs =
-        await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
 
-    await _migrateLegacyNotes(
-      prefs,
-      key,
-    );
+    await _migrateLegacyNotes(prefs, key);
 
-    final savedNotes =
-        prefs.getStringList(key) ?? [];
+    final savedNotes = prefs.getStringList(key) ?? [];
 
-    String? noteId;
-
-    if (item.data != null &&
-        item.data!.isNotEmpty) {
-      noteId = item.data;
+    if (savedNotes.isEmpty) {
+      return null;
     }
 
-    if (noteId != null) {
-      final directId = noteId.startsWith(
-        'note_',
-      )
-          ? noteId.substring(5)
-          : noteId;
+    final notes = <NoteModel>[];
 
-      for (final noteString in savedNotes) {
-        try {
-          final decoded =
-              jsonDecode(noteString);
+    for (final noteString in savedNotes) {
+      try {
+        final decoded = jsonDecode(noteString);
 
-          if (decoded is! Map) {
-            continue;
-          }
+        if (decoded is! Map) {
+          continue;
+        }
 
-          final note =
-              NoteModel.fromJson(
-            Map<String, dynamic>.from(
-              decoded,
-            ),
-          );
+        final note = NoteModel.fromJson(Map<String, dynamic>.from(decoded));
 
-          if (note.id == directId) {
-            return note;
-          }
-        } catch (_) {}
+        notes.add(note);
+      } catch (_) {}
+    }
+
+    if (notes.isEmpty) {
+      return null;
+    }
+
+    final directId = _extractNoteId(item);
+
+    if (directId != null && directId.isNotEmpty) {
+      for (final note in notes) {
+        if (note.id == directId) {
+          return note;
+        }
       }
     }
 
-    if (item.data != null &&
-        item.data!.isNotEmpty) {
-      try {
-        final decoded =
-            jsonDecode(item.data!);
+    final itemId = item.id;
 
-        if (decoded is Map) {
-          final oldNote =
-              NoteModel.fromJson(
-            Map<String, dynamic>.from(
-              decoded,
-            ),
-          );
+    if (itemId.startsWith('note_')) {
+      final itemNoteId = itemId.substring(5);
 
-          for (final noteString in savedNotes) {
-            try {
-              final currentDecoded =
-                  jsonDecode(noteString);
-
-              if (currentDecoded is! Map) {
-                continue;
-              }
-
-              final currentNote =
-                  NoteModel.fromJson(
-                Map<String, dynamic>.from(
-                  currentDecoded,
-                ),
-              );
-
-              if (currentNote.id ==
-                  oldNote.id) {
-                return currentNote;
-              }
-            } catch (_) {}
+      if (itemNoteId.isNotEmpty) {
+        for (final note in notes) {
+          if (note.id == itemNoteId) {
+            return note;
           }
-
-          return oldNote;
         }
-      } catch (_) {}
+      }
+    }
+
+    final itemTitle = item.title.trim().toLowerCase();
+
+    if (itemTitle.isNotEmpty) {
+      final matchingTitleNotes = notes.where((note) {
+        return note.title.trim().toLowerCase() == itemTitle;
+      }).toList();
+
+      if (matchingTitleNotes.length == 1) {
+        return matchingTitleNotes.first;
+      }
+
+      if (matchingTitleNotes.isNotEmpty) {
+        final matchingTime = _findNoteByUpdatedTime(
+          matchingTitleNotes,
+          item.createdAt,
+        );
+
+        if (matchingTime != null) {
+          return matchingTime;
+        }
+      }
+    }
+
+    final legacyNote = _decodeLegacyNote(item.data);
+
+    if (legacyNote != null) {
+      for (final note in notes) {
+        if (note.id == legacyNote.id) {
+          return note;
+        }
+      }
+    }
+
+    return legacyNote;
+  }
+
+  static String? _extractNoteId(ScanlyItem item) {
+    final data = item.data;
+
+    if (data != null && data.isNotEmpty) {
+      final trimmed = data.trim();
+
+      if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+        if (trimmed.startsWith('note_')) {
+          return trimmed.substring(5);
+        }
+
+        return trimmed;
+      }
+
+      final legacyNote = _decodeLegacyNote(trimmed);
+
+      if (legacyNote != null) {
+        return legacyNote.id;
+      }
+    }
+
+    if (item.id.startsWith('note_')) {
+      final id = item.id.substring(5);
+
+      if (id.isNotEmpty) {
+        return id;
+      }
     }
 
     return null;
   }
 
-  static Future<void> _saveUpdatedNote(
-    NoteModel note,
-  ) async {
+  static NoteModel? _decodeLegacyNote(String? data) {
+    if (data == null || data.isEmpty) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(data);
+
+      if (decoded is! Map) {
+        return null;
+      }
+
+      return NoteModel.fromJson(Map<String, dynamic>.from(decoded));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static NoteModel? _findNoteByUpdatedTime(
+    List<NoteModel> notes,
+    int createdAt,
+  ) {
+    if (notes.isEmpty) {
+      return null;
+    }
+
+    NoteModel? closest;
+    int? smallestDifference;
+
+    for (final note in notes) {
+      final difference = (note.updatedAt.millisecondsSinceEpoch - createdAt)
+          .abs();
+
+      if (smallestDifference == null || difference < smallestDifference) {
+        smallestDifference = difference;
+        closest = note;
+      }
+    }
+
+    if (closest == null || smallestDifference == null) {
+      return null;
+    }
+
+    final maxAllowedDifference = Duration(minutes: 5).inMilliseconds;
+
+    if (smallestDifference <= maxAllowedDifference) {
+      return closest;
+    }
+
+    return null;
+  }
+
+  static Future<void> _saveUpdatedNote(NoteModel note) async {
     final key = _notesKey;
 
     if (key == null) {
       return;
     }
 
-    final prefs =
-        await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
 
-    await _migrateLegacyNotes(
-      prefs,
-      key,
-    );
+    await _migrateLegacyNotes(prefs, key);
 
-    final savedNotes =
-        prefs.getStringList(key) ?? [];
+    final savedNotes = prefs.getStringList(key) ?? [];
 
     final updatedNotes = <String>[];
 
@@ -303,92 +330,48 @@ class ScanlyItemOpener {
 
     for (final noteString in savedNotes) {
       try {
-        final decoded =
-            jsonDecode(noteString);
+        final decoded = jsonDecode(noteString);
 
         if (decoded is! Map) {
           continue;
         }
 
-        final currentNote =
-            NoteModel.fromJson(
-          Map<String, dynamic>.from(
-            decoded,
-          ),
+        final currentNote = NoteModel.fromJson(
+          Map<String, dynamic>.from(decoded),
         );
 
         if (currentNote.id == note.id) {
-          updatedNotes.add(
-            jsonEncode(
-              note.toJson(),
-            ),
-          );
+          updatedNotes.add(jsonEncode(note.toJson()));
 
           found = true;
         } else {
-          updatedNotes.add(
-            jsonEncode(
-              currentNote.toJson(),
-            ),
-          );
+          updatedNotes.add(jsonEncode(currentNote.toJson()));
         }
       } catch (_) {}
     }
 
     if (!found) {
-      updatedNotes.add(
-        jsonEncode(
-          note.toJson(),
-        ),
-      );
+      updatedNotes.add(jsonEncode(note.toJson()));
     }
 
-    await prefs.setStringList(
-      key,
-      updatedNotes,
-    );
+    await prefs.setStringList(key, updatedNotes);
 
-    final item = ScanlyItem(
-      id: 'note_${note.id}',
-      title: note.title.isEmpty
-          ? 'Untitled Note'
-          : note.title,
-      subtitle: _previewText(note),
-      type: 'note',
-      route: '/view-note',
-      data: note.id,
-      createdAt:
-          note.updatedAt.millisecondsSinceEpoch,
-    );
+    final item = _noteToItem(note);
 
-    if (ScanlyActivityService.isFavorite(
-      item.id,
-    )) {
-      await ScanlyActivityService.addFavorite(
-        item,
-      );
+    if (ScanlyActivityService.isFavorite(item.id)) {
+      await ScanlyActivityService.addFavorite(item);
     }
 
-    if (ScanlyActivityService.isRecent(
-      item.id,
-    )) {
-      await ScanlyActivityService.addRecent(
-        item,
-      );
+    if (ScanlyActivityService.isRecent(item.id)) {
+      await ScanlyActivityService.addRecent(item);
     }
   }
 
-  static Future<void> _openPdf(
-    BuildContext context,
-    ScanlyItem item,
-  ) async {
+  static Future<void> _openPdf(BuildContext context, ScanlyItem item) async {
     final path = item.data;
 
     if (path == null || path.isEmpty) {
-      _showMessage(
-        context,
-        'PDF file path is not available',
-      );
+      _showMessage(context, 'PDF file path is not available');
 
       return;
     }
@@ -397,16 +380,12 @@ class ScanlyItemOpener {
       final file = File(path);
 
       if (!await file.exists()) {
-        _showMessage(
-          context,
-          'PDF file no longer exists',
-        );
+        _showMessage(context, 'PDF file no longer exists');
 
         return;
       }
 
-      final bytes =
-          await file.readAsBytes();
+      final bytes = await file.readAsBytes();
 
       if (!context.mounted) {
         return;
@@ -414,12 +393,10 @@ class ScanlyItemOpener {
 
       DocumentModel? document;
 
-      final documents =
-          DocumentStorage.getDocuments();
+      final documents = DocumentStorage.getDocuments();
 
       for (final currentDocument in documents) {
-        if (currentDocument.filePath ==
-            path) {
+        if (currentDocument.filePath == path) {
           document = currentDocument;
           break;
         }
@@ -428,13 +405,11 @@ class ScanlyItemOpener {
       document ??= DocumentModel(
         id: item.id,
         title: _fileNameFromPath(path),
-        date:
-            DateTime.now().toIso8601String(),
+        date: DateTime.now().toIso8601String(),
         type: 'pdf',
         filePath: path,
         isFavorite: false,
-        lastOpened:
-            DateTime.now().toIso8601String(),
+        lastOpened: DateTime.now().toIso8601String(),
       );
 
       await Navigator.push(
@@ -443,30 +418,22 @@ class ScanlyItemOpener {
           builder: (_) => PDFPreviewPage(
             document: document!,
             pdfBytes: bytes,
-            fileName:
-                _fileNameFromPath(path),
+            fileName: _fileNameFromPath(path),
           ),
         ),
       );
     } catch (e) {
-      debugPrint(
-        'OPEN PDF ERROR: $e',
-      );
+      debugPrint('OPEN PDF ERROR: $e');
 
       if (!context.mounted) {
         return;
       }
 
-      _showMessage(
-        context,
-        'Could not open PDF',
-      );
+      _showMessage(context, 'Could not open PDF');
     }
   }
 
-  static String _previewText(
-    NoteModel note,
-  ) {
+  static String _previewText(NoteModel note) {
     if (note.quillData.isEmpty) {
       return 'No content';
     }
@@ -474,14 +441,10 @@ class ScanlyItemOpener {
     return 'Tap to open this note';
   }
 
-  static String _fileNameFromPath(
-    String path,
-  ) {
-    final normalizedPath =
-        path.replaceAll('\\', '/');
+  static String _fileNameFromPath(String path) {
+    final normalizedPath = path.replaceAll('\\', '/');
 
-    final parts =
-        normalizedPath.split('/');
+    final parts = normalizedPath.split('/');
 
     if (parts.isEmpty) {
       return 'Scanly_Document.pdf';
@@ -496,18 +459,11 @@ class ScanlyItemOpener {
     return name;
   }
 
-  static void _showMessage(
-    BuildContext context,
-    String message,
-  ) {
+  static void _showMessage(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior:
-              SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
   }
 }
